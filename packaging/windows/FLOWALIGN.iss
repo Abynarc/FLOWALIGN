@@ -70,15 +70,24 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  Existing, Backup: String;
+  Existing, Backup, BaseBackup: String;
+  Suffix: Integer;
 begin
   Result := '';
   if Prepared then Exit;
   Existing := ExpandConstant('{commoncf64}\VST3\FLOWALIGN.vst3');
   if DirExists(Existing) then
   begin
-    Backup := ExpandConstant('{commonappdata}\FLOWMINNERS\FLOWALIGN\Backups\') +
-      GetDateTimeString('yyyymmdd-hhnnss', '-', ':') + '-' + IntToStr(GetTickCount) + '\FLOWALIGN.vst3';
+    BaseBackup := ExpandConstant('{commonappdata}\FLOWMINNERS\FLOWALIGN\Backups\') +
+      GetDateTimeString('yyyymmdd-hhnnss', '-', ':');
+    Backup := BaseBackup;
+    Suffix := 0;
+    while DirExists(Backup) do
+    begin
+      Suffix := Suffix + 1;
+      Backup := BaseBackup + '-' + IntToStr(Suffix);
+    end;
+    Backup := Backup + '\FLOWALIGN.vst3';
     if not CopyBackup(Existing, Backup) then
     begin
       Result := 'Не удалось проверить резервную копию FLOWALIGN. Закройте аудиопрограммы и проверьте доступ к папке ProgramData.';
