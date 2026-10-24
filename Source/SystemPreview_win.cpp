@@ -1,126 +1,195 @@
 #include "SystemPreview.h"
+#ifndef NOMINMAX
+ #define NOMINMAX
+#endif
+#include <windows.h>
+#include <audioclient.h>
+#include <mmdeviceapi.h>
+#include <wrl/client.h>
+#include <avrt.h>
 #include <atomic>
 #include <cmath>
+#include <future>
 #include <mutex>
+#include <thread>
 
 namespace flowalign
 {
-struct SystemPreview::Impl final : juce::AudioIODeviceCallback
+struct SystemPreview::Impl
 {
-    // Only lifecycle calls take this mutex. The audio callback never locks or allocates.
+    // All COM objects live and die on the output thread. A decoder/host worker may
+    // stop audition safely, without destroying message-thread windows or devices.
     mutable std::recursive_mutex mutex;
-    std::unique_ptr<juce::AudioIODeviceType> type;
-    std::unique_ptr<juce::AudioIODevice> device;
+    std::thread worker;
+    HANDLE stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     juce::AudioBuffer<float> audio;
-    double sourceRate = 0.0, deviceRate = 0.0, cursor = 0.0;
+    double rate = 0.0;
     std::atomic<bool> playing { false }, looping { false };
     std::atomic<double> seconds { 0.0 }, requestedSeek { 0.0 };
     std::atomic<unsigned> seekRevision { 0 };
-    unsigned appliedSeek = 0;
     std::atomic<float> level { 0.0f };
+    ~Impl() { if (stopEvent != nullptr) CloseHandle(stopEvent); }
 
-    void audioDeviceAboutToStart(juce::AudioIODevice* output) override
-    { deviceRate = output->getCurrentSampleRate(); }
-    void audioDeviceStopped() override { playing.store(false); level.store(0.0f); }
-    void audioDeviceError(const juce::String&) override { playing.store(false); level.store(0.0f); }
-    void audioDeviceIOCallbackWithContext(const float* const*, int, float* const* output,
-        int channels, int count, const juce::AudioIODeviceCallbackContext&) override
+    void run(std::promise<juce::String> ready)
     {
-        for (int c = 0; c < channels; ++c)
-            if (output[c] != nullptr) juce::FloatVectorOperations::clear(output[c], count);
-        if (!playing.load() || deviceRate <= 0.0 || audio.getNumSamples() == 0) return;
-        const auto revision = seekRevision.load();
-        if (appliedSeek != revision)
-        { cursor = requestedSeek.load() * sourceRate; appliedSeek = revision; }
-        const auto length = audio.getNumSamples();
-        const double step = sourceRate / deviceRate;
-        float maximum = 0.0f;
-        for (int i = 0; i < count; ++i)
+        bool notified = false;
+        auto notify = [&](const juce::String& error)
+        { if (!notified) { ready.set_value(error); notified = true; } };
+        try
         {
-            if (cursor >= length)
+            const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            struct Apartment
             {
-                if (looping.load()) cursor = std::fmod(cursor, static_cast<double>(length));
-                else { cursor = length; playing.store(false); break; }
-            }
-            const int a = juce::jlimit(0, length - 1, static_cast<int>(cursor));
-            const int b = juce::jmin(a + 1, length - 1);
-            const float fraction = static_cast<float>(cursor - a);
-            for (int c = 0; c < channels; ++c)
+                bool initialized;
+                ~Apartment() { if (initialized) CoUninitialize(); }
+            } apartment { SUCCEEDED(initialized) };
+            auto failure = [&](HRESULT result)
             {
-                if (output[c] == nullptr) continue;
-                // Mono is duplicated; stereo remains stereo on the first two speakers.
-                if (c >= 2) continue;
-                const auto* input = audio.getReadPointer(juce::jmin(c, audio.getNumChannels() - 1));
-                const float value = input[a] + fraction * (input[b] - input[a]);
-                output[c][i] = value;
-                maximum = juce::jmax(maximum, std::abs(value));
+                notify(juce::String::fromUTF8(u8"Windows не открыла системный аудиовыход (WASAPI 0x")
+                    + juce::String::toHexString(static_cast<int>(result))
+                    + juce::String::fromUTF8(u8"). Проверьте выход звука и эксклюзивный режим ASIO"));
+            };
+            if (FAILED(initialized)) { failure(initialized); return; }
+            using Microsoft::WRL::ComPtr;
+            ComPtr<IMMDeviceEnumerator> enumerator;
+            ComPtr<IMMDevice> endpoint;
+            ComPtr<IAudioClient> client;
+            ComPtr<IAudioRenderClient> render;
+            HRESULT result = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                IID_PPV_ARGS(enumerator.GetAddressOf()));
+            if (SUCCEEDED(result)) result = enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, endpoint.GetAddressOf());
+            if (SUCCEEDED(result)) result = endpoint->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                reinterpret_cast<void**>(client.GetAddressOf()));
+            WAVEFORMATEX format {};
+            format.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
+            format.nChannels = 2;
+            format.nSamplesPerSec = static_cast<DWORD>(juce::roundToInt(rate));
+            format.wBitsPerSample = 32;
+            format.nBlockAlign = 8;
+            format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
+            // Windows converts this stream to its existing shared mix format.
+            // No input, ASIO driver or DAW sample-rate configuration is opened.
+            if (SUCCEEDED(result)) result = client->Initialize(AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+                1000000, 0, &format, nullptr);
+            UINT32 capacity = 0;
+            if (SUCCEEDED(result)) result = client->GetBufferSize(&capacity);
+            if (SUCCEEDED(result)) result = client->GetService(IID_PPV_ARGS(render.GetAddressOf()));
+            if (FAILED(result) || capacity == 0)
+            { failure(FAILED(result) ? result : E_FAIL); return; }
+            DWORD taskIndex = 0;
+            struct AudioTask
+            {
+                HANDLE handle;
+                ~AudioTask() { if (handle != nullptr) AvRevertMmThreadCharacteristics(handle); }
+            } task { AvSetMmThreadCharacteristicsW(L"Audio", &taskIndex) };
+            const int length = audio.getNumSamples();
+            int cursor = juce::jlimit(0, length, juce::roundToInt(seconds.load() * rate));
+            unsigned appliedSeek = seekRevision.load();
+            bool started = false, draining = false;
+            while (WaitForSingleObject(stopEvent, 0) == WAIT_TIMEOUT)
+            {
+                const auto revision = seekRevision.load();
+                if (revision != appliedSeek)
+                {
+                    if (started) { result = client->Stop(); if (FAILED(result)) break; }
+                    result = client->Reset(); if (FAILED(result)) break;
+                    cursor = juce::jlimit(0, length, juce::roundToInt(requestedSeek.load() * rate));
+                    appliedSeek = revision; draining = false; started = false;
+                }
+                UINT32 padding = 0;
+                result = client->GetCurrentPadding(&padding);
+                if (FAILED(result)) break;
+                if (draining)
+                {
+                    if (padding == 0) { seconds.store(length / rate); break; }
+                }
+                else if (padding < capacity)
+                {
+                    const UINT32 count = capacity - padding;
+                    BYTE* data = nullptr;
+                    result = render->GetBuffer(count, &data);
+                    if (FAILED(result)) break;
+                    auto* output = reinterpret_cast<float*>(data);
+                    float maximum = 0.0f;
+                    for (UINT32 i = 0; i < count; ++i)
+                    {
+                        if (cursor >= length)
+                        {
+                            if (looping.load()) cursor = 0;
+                            else draining = true;
+                        }
+                        for (int c = 0; c < 2; ++c)
+                        {
+                            const float value = draining ? 0.0f : audio.getSample(juce::jmin(c, audio.getNumChannels() - 1), cursor);
+                            *output++ = value;
+                            maximum = juce::jmax(maximum, std::abs(value));
+                        }
+                        if (!draining) ++cursor;
+                    }
+                    result = render->ReleaseBuffer(count, 0);
+                    if (FAILED(result)) break;
+                    level.store(maximum);
+                    if (seekRevision.load() == revision) seconds.store(cursor / rate);
+                    if (!started)
+                    {
+                        result = client->Start(); if (FAILED(result)) break;
+                        started = true; playing.store(true); notify({});
+                    }
+                }
+                if (WaitForSingleObject(stopEvent, 10) != WAIT_TIMEOUT) break;
             }
-            cursor += step;
+            if (started) client->Stop();
+            if (!notified) failure(FAILED(result) ? result : E_ABORT);
         }
-        if (seekRevision.load() == revision) seconds.store(cursor / sourceRate);
-        level.store(maximum);
+        catch (const std::exception& error)
+        { notify(juce::String::fromUTF8(u8"Не удалось запустить плеер Windows: ") + juce::String::fromUTF8(error.what())); }
+        catch (...) { notify(juce::String::fromUTF8(u8"Не удалось запустить плеер Windows")); }
+        playing.store(false); level.store(0.0f);
     }
 };
 
 SystemPreview::SystemPreview() : impl(std::make_unique<Impl>()) {}
 SystemPreview::~SystemPreview() { stop(); }
-
 bool SystemPreview::start(const juce::MemoryBlock& wave, double startSeconds, bool loop, juce::String& error)
 {
     const std::lock_guard<std::recursive_mutex> lock(impl->mutex);
     stop();
+    if (impl->stopEvent == nullptr)
+    { error = juce::String::fromUTF8(u8"Windows не создала событие аудиоплеера"); return false; }
     juce::WavAudioFormat format;
-    std::unique_ptr<juce::AudioFormatReader> reader(format.createReaderFor(
-        new juce::MemoryInputStream(wave, false), true));
+    std::unique_ptr<juce::AudioFormatReader> reader(format.createReaderFor(new juce::MemoryInputStream(wave, false), true));
     if (!reader || reader->lengthInSamples <= 0 || reader->lengthInSamples > 23040000
-        || reader->numChannels < 1 || reader->numChannels > 2 || reader->sampleRate <= 0)
+        || reader->numChannels < 1 || reader->numChannels > 2 || reader->sampleRate < 8000 || reader->sampleRate > 192000)
     { error = juce::String::fromUTF8(u8"Нет подходящего аудио для прослушивания"); return false; }
     impl->audio.setSize(static_cast<int>(reader->numChannels), static_cast<int>(reader->lengthInSamples));
     if (!reader->read(&impl->audio, 0, impl->audio.getNumSamples(), 0, true, true))
     { error = juce::String::fromUTF8(u8"Не удалось прочитать аудио для прослушивания"); return false; }
-    impl->sourceRate = reader->sampleRate;
-    impl->cursor = juce::jlimit(0.0, static_cast<double>(impl->audio.getNumSamples()), startSeconds * reader->sampleRate);
-    impl->seconds.store(impl->cursor / impl->sourceRate);
-    impl->seekRevision.store(0); impl->appliedSeek = 0; impl->looping.store(loop);
-    impl->type.reset(juce::AudioIODeviceType::createAudioIODeviceType_WASAPI(juce::WASAPIDeviceMode::shared));
-    if (impl->type)
-    {
-        impl->type->scanForDevices();
-        const auto names = impl->type->getDeviceNames(false);
-        const int index = impl->type->getDefaultDeviceIndex(false);
-        if (juce::isPositiveAndBelow(index, names.size()))
-            impl->device.reset(impl->type->createDevice(names[index], {}));
-    }
-    if (!impl->device)
-    { error = juce::String::fromUTF8(u8"Windows не нашла системный аудиовыход. Проверьте выход звука"); stop(); return false; }
-    juce::BigInteger noInputs, outputs;
-    outputs.setRange(0, juce::jmin(2, impl->device->getOutputChannelNames().size()), true);
-    if (outputs.isZero())
-    { error = juce::String::fromUTF8(u8"У системного устройства нет выходных каналов"); stop(); return false; }
-    // Use the Windows shared mix rate. Do not change the DAW's ASIO device or rate.
-    error = impl->device->open(noInputs, outputs, 0.0, 0);
-    if (error.isNotEmpty())
-    { error = juce::String::fromUTF8(u8"Windows не открыла системный аудиовыход: ") + error; stop(); return false; }
-    impl->playing.store(true);
-    impl->device->start(impl.get());
-    if (!impl->device->isPlaying())
-    { error = juce::String::fromUTF8(u8"Windows не запустила аудиовыход. Проверьте, не занят ли он в эксклюзивном режиме"); stop(); return false; }
+    impl->rate = reader->sampleRate;
+    impl->seconds.store(juce::jlimit(0.0, impl->audio.getNumSamples() / impl->rate, startSeconds));
+    impl->seekRevision.store(0); impl->looping.store(loop);
+    ResetEvent(impl->stopEvent);
+    std::promise<juce::String> ready;
+    auto startup = ready.get_future();
+    impl->worker = std::thread([state = impl.get(), ready = std::move(ready)]() mutable { state->run(std::move(ready)); });
+    error = startup.get();
+    if (error.isNotEmpty()) { stop(); return false; }
     return true;
 }
 void SystemPreview::stop()
 {
     const std::lock_guard<std::recursive_mutex> lock(impl->mutex);
-    impl->playing.store(false);
-    if (impl->device) { impl->device->stop(); impl->device->close(); }
-    impl->device.reset(); impl->type.reset();
-    impl->audio.setSize(0, 0); impl->level.store(0.0f);
+    if (impl->stopEvent != nullptr) SetEvent(impl->stopEvent);
+    if (impl->worker.joinable()) impl->worker.join();
+    impl->playing.store(false); impl->level.store(0.0f);
+    impl->audio.setSize(0, 0);
 }
 bool SystemPreview::isPlaying() const { return impl->playing.load(); }
 double SystemPreview::position() const { return impl->seconds.load(); }
 void SystemPreview::seek(double positionSeconds)
 {
     const std::lock_guard<std::recursive_mutex> lock(impl->mutex);
-    const double duration = impl->sourceRate > 0 ? impl->audio.getNumSamples() / impl->sourceRate : 0.0;
+    const double duration = impl->rate > 0 ? impl->audio.getNumSamples() / impl->rate : 0.0;
     const double target = juce::jlimit(0.0, duration, positionSeconds);
     impl->requestedSeek.store(target); impl->seekRevision.fetch_add(1); impl->seconds.store(target);
 }
