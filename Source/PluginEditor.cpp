@@ -443,7 +443,7 @@ FLOWALIGNAudioProcessorEditor::FLOWALIGNAudioProcessorEditor(FLOWALIGNAudioProce
         juce::PopupMenu menu; menu.addItem(1, ru(u8"Как добавить дорожки и выровнять вокал"));
         menu.addItem(2, ru(u8"Очистить сессию…"), !engine.isBusy() && !engine.isCapturing()); menu.addItem(4, ru(u8"Открыть файл эталона…"), !engine.isBusy() && !engine.isCapturing());
         menu.addItem(5, ru(u8"Открыть файл дубля…"), !engine.isBusy() && !engine.isCapturing());
-        menu.addSeparator(); menu.addItem(3, "FLOWALIGN 0.3.2 / FLOWMINNERS", false);
+        menu.addSeparator(); menu.addItem(3, juce::String("FLOWALIGN ") + JucePlugin_VersionString + " / FLOWMINNERS", false);
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&settingsButton), [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this)](int id)
         {
             if (!safe) return;
