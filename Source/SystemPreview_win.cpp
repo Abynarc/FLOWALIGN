@@ -3,6 +3,7 @@
  #define NOMINMAX
 #endif
 #include <windows.h>
+#include <mmreg.h>
 #include <audioclient.h>
 #include <mmdeviceapi.h>
 #include <wrl/client.h>
@@ -37,7 +38,7 @@ struct SystemPreview::Impl
         { if (!notified) { ready.set_value(error); notified = true; } };
         try
         {
-            const HRESULT initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            const HRESULT initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
             struct Apartment
             {
                 bool initialized;

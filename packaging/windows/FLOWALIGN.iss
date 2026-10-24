@@ -89,7 +89,7 @@ begin
   Prepared := True;
 end;
 
-#include "{#ManifestInclude}"
+#include ManifestInclude
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
