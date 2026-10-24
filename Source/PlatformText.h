@@ -10,6 +10,8 @@ inline juce::String platformText(const char* text)
 #if JUCE_WINDOWS
     result = result.replace("Logic Pro", "DAW").replace("Logic", "DAW").replace("LOGIC", "DAW")
                    .replace("macOS", "Windows")
+                   .replace("WAV В FINDER", juce::String::fromUTF8(u8"ОТКРЫТЬ WAV"))
+                   .replace(juce::String::fromUTF8(u8"«WAV в Finder»"), juce::String::fromUTF8(u8"«Открыть WAV»"))
                    .replace("в Finder", juce::String::fromUTF8(u8"в Проводнике"))
                    .replace("из Finder", juce::String::fromUTF8(u8"из Проводника"))
                    .replace("через Finder", juce::String::fromUTF8(u8"через Проводник"))

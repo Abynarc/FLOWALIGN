@@ -19,6 +19,18 @@ try {
     $Plugin = (Resolve-Path "$BuildDir/FLOWALIGN_artefacts/Release/VST3/FLOWALIGN.vst3").Path
     $Binary = Join-Path $Plugin "Contents/x86_64-win/FLOWALIGN.vst3"
     if (!(Test-Path $Binary -PathType Leaf)) { throw "Missing x64 VST3 binary" }
+    $Bytes = [IO.File]::ReadAllBytes($Binary)
+    $PeOffset = [BitConverter]::ToInt32($Bytes, 0x3c)
+    if ([BitConverter]::ToUInt32($Bytes, $PeOffset) -ne 0x00004550 -or
+        [BitConverter]::ToUInt16($Bytes, $PeOffset + 4) -ne 0x8664) { throw "VST3 binary is not Windows x64 PE" }
+    $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    $VisualStudio = & $VsWhere -latest -products '*' -property installationPath
+    $Dumpbin = Get-ChildItem "$VisualStudio/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+    if (!$Dumpbin) { throw "Missing dependency inspection tool" }
+    $Imports = & $Dumpbin.FullName /dependents $Binary | Out-String
+    if ($LASTEXITCODE) { throw "Dependency inspection failed" }
+    Write-Output $Imports
+    if ($Imports -match '(?i)(vcruntime|msvcp|concrt)\d+.*\.dll') { throw "Unexpected Visual C++ runtime dependency; build with static runtime" }
     $Dist = (New-Item -ItemType Directory -Force dist).FullName
     $Doc = Join-Path $Dist "FLOWALIGN-$Version-Windows-Install-RU.txt"
     Copy-Item docs/INSTALL-WINDOWS.md $Doc -Force
