@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+. "$(dirname -- "$0")/common.sh"
+/usr/bin/codesign --verify --deep --strict "$FLOWALIGN_COMPONENT"
+(cd "$FLOWALIGN_COMPONENT" && /usr/bin/shasum -a 256 -c "$FLOWALIGN_SCRIPT_DIR/component.sha256")
+# A previous per-user AU shadows the new system AU. Preserve it outside the scan folder.
+if console_home; then
+    FLOWALIGN_PERSONAL="$FLOWALIGN_ROOT$FLOWALIGN_USER_HOME/Library/Audio/Plug-Ins/Components/FLOWALIGN.component"
+    if [ -e "$FLOWALIGN_PERSONAL" ] || [ -L "$FLOWALIGN_PERSONAL" ]; then
+        if [ -L "$FLOWALIGN_PERSONAL" ] || [ ! -d "$FLOWALIGN_PERSONAL" ]; then
+            echo 'FLOWALIGN: пользовательская копия является ссылкой или необычным файлом; она сохранена на месте.' >&2
+            exit 1
+        fi
+        FLOWALIGN_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$FLOWALIGN_PERSONAL/Contents/Info.plist")
+        if [ "$FLOWALIGN_ID" != 'com.flowminners.flowalign' ]; then
+            echo 'FLOWALIGN: пользовательская копия имеет другой идентификатор; она сохранена на месте.' >&2
+            exit 1
+        fi
+        FLOWALIGN_BACKUP=$(backup_directory)
+        /bin/mkdir "$FLOWALIGN_BACKUP/Previous-user-copy"
+        /bin/mv "$FLOWALIGN_PERSONAL" "$FLOWALIGN_BACKUP/Previous-user-copy/FLOWALIGN.component"
+        echo "FLOWALIGN: прежняя пользовательская копия сохранена: $FLOWALIGN_BACKUP/Previous-user-copy"
+    fi
+    if [ "$FLOWALIGN_VOLUME" = '/' ]; then
+        /usr/bin/killall -u "$FLOWALIGN_CONSOLE_USER" AudioComponentRegistrar 2>/dev/null || true
+    fi
+fi
+echo 'FLOWALIGN установлен и проверен. Откройте Logic Pro заново.'

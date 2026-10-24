@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+. "$(dirname -- "$0")/common.sh"
+# This script only copies the old system AU; Installer performs the actual replacement.
+if [ -e "$FLOWALIGN_COMPONENT" ] || [ -L "$FLOWALIGN_COMPONENT" ]; then
+    if [ -L "$FLOWALIGN_COMPONENT" ] || [ ! -d "$FLOWALIGN_COMPONENT" ]; then
+        echo 'FLOWALIGN: путь системного плагина не является обычным пакетом .component.' >&2
+        exit 1
+    fi
+    FLOWALIGN_BACKUP=$(backup_directory)
+    /usr/bin/ditto "$FLOWALIGN_COMPONENT" "$FLOWALIGN_BACKUP/FLOWALIGN.component"
+    /usr/bin/diff -qr "$FLOWALIGN_COMPONENT" "$FLOWALIGN_BACKUP/FLOWALIGN.component"
+    echo "FLOWALIGN: резервная копия системного AU: $FLOWALIGN_BACKUP"
+fi
