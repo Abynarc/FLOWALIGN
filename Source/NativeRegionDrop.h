@@ -10,11 +10,24 @@ struct RegionDrop
     std::shared_ptr<void> lease;
     juce::String error;
     bool promised = false;
+    bool checkLength = false;
 };
 
-class NativeRegionDrop final : public juce::NSViewComponent
+class NativeRegionDrop final
+#if JUCE_MAC
+    : public juce::NSViewComponent
+#else
+    : public juce::Component, public juce::FileDragAndDropTarget
+#endif
 {
 public:
+#if JUCE_WINDOWS
+    bool isInterestedInFileDrag(const juce::StringArray&) override;
+    void fileDragEnter(const juce::StringArray&, int, int) override;
+    void fileDragExit(const juce::StringArray&) override;
+    void filesDropped(const juce::StringArray&, int, int) override;
+    void mouseDown(const juce::MouseEvent&) override;
+#endif
     using Completion = std::function<void(RegionDrop)>;
     NativeRegionDrop();
     ~NativeRegionDrop() override;

@@ -1,11 +1,12 @@
 #include "PluginEditor.h"
 #include <cmath>
+#include "PlatformText.h"
 
 namespace
 {
 using Track = FLOWALIGNAudioProcessor::Track;
 const juce::Colour green(0xff5aff91), muted(0xff8faaa4), border(0xff2a3e3e), white(0xffeef5f4);
-juce::String ru(const char* text) { return juce::String::fromUTF8(text); }
+juce::String ru(const char* text) { return flowalign::platformText(text); }
 void font(juce::Graphics& g, float size, bool bold = false, float spacing = 0.0f)
 {
     juce::Font f(juce::FontOptions("Arial", size, bold ? juce::Font::bold : juce::Font::plain));
@@ -610,6 +611,15 @@ void FLOWALIGNAudioProcessorEditor::sourceMenu(Track track, juce::Component* tar
 
 void FLOWALIGNAudioProcessorEditor::showHelp()
 {
+#if JUCE_WINDOWS
+    juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, ru(u8"FLOWALIGN в Windows"),
+        ru(u8"Перетащите два аудиофайла одинаковой длины на волны эталона и дубля. В FL Studio используйте ручку Drag/copy sample/selection в Edison: переносится выделение или весь сэмпл. Внутренний клип Playlist может не передавать аудиофайл. Тогда используйте захват через Side Chain.\n\n"
+           u8"Вставьте FLOWALIGN на дубль. Направьте эталон в Side Chain и подключите дополнительный вход в настройках wrapper → Processing. Выберите «Оба сигнала», нажмите «Запись», затем Play в секвенсоре. Stop завершает захват. Эталон и дубль можно записать отдельно. Mute/Solo не выбирают источник.\n\n"
+           u8"Кнопки «Слушать» воспроизводят каждый сигнал отдельно через системный выход Windows. Для этого остановите транспорт. Если устройство занято эксклюзивным ASIO, освободите системный выход или слушайте через транспорт.\n\n"
+           u8"Нажмите «Выровнять», сравните «До / После» и перетащите кнопку результата на таймлайн. При недоступном переносе откройте готовый WAV кнопкой у результата. Обычный клик не создаёт дорожку.\n\n"
+           u8"Позиция импортированного аудио не передаётся: для режима транспорта поставьте курсор на начало дубля и нажмите кнопку связи. Не запускайте секвенсор от администратора: это мешает переносу из Проводника.\n\n"
+           u8"До 8 пар, до 120 секунд на сигнал, суммарно 256 МБ. После изменения настроек снова нажмите «Выровнять»."), ru(u8"Понятно"), this);
+#else
     juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, ru(u8"Запись с таймлайна Logic"),
         ru(u8"Быстрый способ: обрежьте два аудиорегиона в Logic до одинаковой длины. Перетащите по одному прямо на волны «Опорная дорожка» и «Доп. дорожка». Logic передаст готовые файлы; записывать их не нужно. Позиция на таймлайне при переносе не передаётся — для режима по транспорту задайте её кнопкой связи.\n\n"
            u8"1. Вставьте FLOWALIGN на дорожку дубля. В Side Chain окна Logic выберите эталон.\n\n"
@@ -621,6 +631,7 @@ void FLOWALIGNAudioProcessorEditor::showHelp()
            u8"6. Зажмите кнопку «Тащите в Logic» и перетащите её в пустую область таймлайна. Обычный клик не создаёт дорожку. Если перетаскивание недоступно, нажмите «WAV в Finder» у результата. WAV готовится автоматически. Позиция дубля показана слева.\n\n"
            u8"Автоматические Play и создание дорожки кнопкой пока недоступны: Bridge требует проверки в Logic. Файловый импорт и экспорт доступны дополнительно.\n\n"
            u8"До 8 пар, до 120 секунд на захват, общий лимит аудио 256 МБ. При изменении настроек снова нажмите «Выровнять»."), ru(u8"Понятно"), this);
+#endif
 }
 
 void FLOWALIGNAudioProcessorEditor::exportAudio(Track track)
@@ -778,7 +789,7 @@ void FLOWALIGNAudioProcessorEditor::pollDrops()
     if (!engine.isDropContextCurrent(pending.context))
     { dropFeedback(ru(u8"Перенос отменён: фраза или выбранный сигнал уже изменились")); return; }
     feedback.clear(); feedbackUntil = 0.0;
-    const bool started = pending.data.promised
+    const bool started = (pending.data.promised || pending.data.checkLength)
         ? engine.loadDroppedRegion(pending.data.file, pending.context, std::move(pending.data.lease))
         : engine.loadFile(pending.data.file, pending.context.track);
     if (!started) dropFeedback(engine.statusText());

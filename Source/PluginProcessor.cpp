@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <cmath>
+#include "PlatformText.h"
 #include <stdexcept>
 #if JUCE_MAC
  #include <pthread/qos.h>
@@ -8,7 +9,7 @@
 
 namespace
 {
-juce::String ru(const char* s) { return juce::String::fromUTF8(s); }
+juce::String ru(const char* s) { return flowalign::platformText(s); }
 struct ReaderEpoch
 {
     std::atomic<int>& readers;

@@ -1,0 +1,75 @@
+name: Windows VST3 installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, windows-vst3]
+    paths: ['Source/**', 'CMakeLists.txt', 'packaging/**', 'docs/INSTALL-WINDOWS.md', '.github/workflows/windows.yml']
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fetch pinned JUCE
+        shell: pwsh
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/juce-framework/JUCE.git ../JUCE
+          if ($LASTEXITCODE) { throw 'JUCE clone failed' }
+          git -C ../JUCE checkout 454fe891acc8204f99f4ef1e3a28c84b1a4da145
+          if ($LASTEXITCODE) { throw 'JUCE checkout failed' }
+      - name: Build x64 VST3 and installer
+        shell: pwsh
+        run: ./packaging/build_windows.ps1
+      - name: Install, verify, upgrade and validate VST3
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Get-ChildItem dist/*-Setup.exe).FullName
+          $bundle = 'C:\Program Files\Common Files\VST3\FLOWALIGN.vst3'
+          $source = (Resolve-Path build-windows/FLOWALIGN_artefacts/Release/VST3/FLOWALIGN.vst3).Path
+          function Check-Exit($process, $label) {
+            if ($process.ExitCode -ne 0) { throw "$label failed: $($process.ExitCode)" }
+          }
+          Check-Exit (Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP/install.log" -PassThru -Wait) 'Install'
+          Get-ChildItem $source -Recurse -File | ForEach-Object {
+            $relative = $_.FullName.Substring($source.Length + 1)
+            if ((Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path $bundle $relative)).Hash) { throw "Installed hash mismatch: $relative" }
+          }
+          Check-Exit (Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP/upgrade.log" -PassThru -Wait) 'Upgrade'
+          $backups = @(Get-ChildItem 'C:\ProgramData\FLOWMINNERS\FLOWALIGN\Backups' -Recurse -File)
+          if ($backups.Count -eq 0) { throw 'Missing upgrade backup' }
+          Get-ChildItem $source -Recurse -File | ForEach-Object {
+            $expected = (Get-FileHash $_.FullName).Hash
+            $backup = @($backups | Where-Object { $_.Name -eq [IO.Path]::GetFileName($_.FullName) -and (Get-FileHash $_.FullName).Hash -eq $expected })
+            if ($backup.Count -eq 0) { throw "Backup hash missing: $($_.Name)" }
+          }
+          Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip -OutFile "$env:RUNNER_TEMP/pluginval.zip"
+          Expand-Archive "$env:RUNNER_TEMP/pluginval.zip" "$env:RUNNER_TEMP/pluginval"
+          $validator = (Get-ChildItem "$env:RUNNER_TEMP/pluginval" -Recurse -Filter pluginval.exe | Select-Object -First 1).FullName
+          $validation = Start-Process $validator -ArgumentList '--validate-in-process','--strictness-level','5','--output-dir',"$env:RUNNER_TEMP/validation",'--validate',"`"$bundle`"" -PassThru -Wait
+          Check-Exit $validation 'VST3 validation'
+          Check-Exit (Start-Process 'C:\Program Files\FLOWMINNERS\FLOWALIGN\unins000.exe' -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru -Wait) 'Uninstall'
+          if (Test-Path "$bundle/Contents/x86_64-win/FLOWALIGN.vst3") { throw 'VST3 was not uninstalled' }
+          if (!(Test-Path 'C:\ProgramData\FLOWMINNERS\FLOWALIGN\Backups')) { throw 'Uninstaller removed backups' }
+      - name: Keep Windows diagnostics in CI only
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-diagnostics
+          path: |
+            ${{ runner.temp }}/validation
+            ${{ runner.temp }}/install.log
+            ${{ runner.temp }}/upgrade.log
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Installer for distribution
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: FLOWALIGN-Windows-x64
+          path: |
+            dist/*-Setup.exe
+            dist/*-Windows-Install-RU.txt
+            dist/SHA256SUMS-Windows.txt
+          if-no-files-found: error
