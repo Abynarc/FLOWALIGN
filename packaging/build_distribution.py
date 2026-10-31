@@ -46,6 +46,11 @@ def main():
     load_commands = subprocess.check_output(['vtool', '-show-build', executable], text=True)
     if re.findall(r'minos\s+([\d.]+)', load_commands) != ['12.0', '12.0']:
         raise RuntimeError('Unexpected minimum macOS version')
+    licenses = source / 'Contents/Resources/Licenses'
+    licenses.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'LICENSE', licenses / 'FLOWMINNERS-MIT.txt')
+    shutil.copy2(ROOT / 'third_party/vst3/LICENSE.txt', licenses / 'Steinberg-VST3-MIT.txt')
+    shutil.copy2(ROOT / 'THIRD_PARTY.md', licenses / 'THIRD_PARTY.md')
     run(['codesign', '--force', '--sign', '-', '--timestamp=none', source])
     run(['codesign', '--verify', '--deep', '--strict', source])
     component_hashes = hashes(source)
@@ -129,6 +134,10 @@ https://support.apple.com/102445
     delivered = [package, readme] + ([image] if dmg_created else [])
     manifest = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in delivered}
     (output / f'{name}-sha256.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n')
+    report = {'version': version, 'architectures': architectures, 'minimumMacOS': '12.0',
+              'developerIDSigned': False, 'notarized': False, 'dmgCreated': dmg_created,
+              'payloadHashes': component_hashes, 'artifacts': manifest}
+    (ROOT / 'verification/packaging/package-verification.json').write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n')
     print('Ready:', package, flush=True)
 
 

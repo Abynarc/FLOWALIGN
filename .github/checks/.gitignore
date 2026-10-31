@@ -1,0 +1,6 @@
+fixtures/
+rendered/
+file-analysis/
+*.json
+*.log
+__pycache__/

@@ -7,7 +7,7 @@
 #include <mutex>
 #include <thread>
 
-class FLOWALIGNAudioProcessor final : public juce::AudioProcessor
+class FLOWALIGNAudioProcessor final : public juce::AudioProcessor, private juce::Timer
 {
 public:
     enum class Track { reference, dub, result };
@@ -124,6 +124,7 @@ public:
     static std::shared_ptr<Clip> makeClip(juce::AudioBuffer<float>, double, juce::String);
 
 private:
+    void timerCallback() override;
     static juce::AudioProcessorValueTreeState::ParameterLayout parameterLayout();
     void publish(std::shared_ptr<Session>);
     void setStatus(juce::String);
@@ -143,7 +144,7 @@ private:
     std::atomic<int> audioReaders { 0 };
     juce::String hostTrackName, status;
     std::thread worker;
-    std::atomic<bool> busy { false }, cancelled { false };
+    std::atomic<bool> busy { false }, cancelled { false }, stateDirty { false };
     std::atomic<uint64_t> dropEpoch { 0 };
     std::atomic<float> progress { 0.0f };
     std::atomic<int> stage { 0 };
@@ -152,7 +153,7 @@ private:
     std::atomic<int> requestedCaptureMode { 0 };
     std::atomic<uint64_t> captureGeneration { 0 };
     uint64_t activeCaptureGeneration = 0;
-    int capturePosition = 0;
+    int capturePosition = 0, captureReferenceChannel = -1;
     double captureStartSeconds = -1.0;
     int64_t expectedHostSample = 0;
     bool captureHasHostTime = false;

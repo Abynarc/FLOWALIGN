@@ -6,7 +6,7 @@ namespace flowalign
 {
 struct Settings
 {
-    float tightness = 0.7f, naturalness = 0.6f, maxStretch = 0.3f;
+    float tightness = 1.0f, naturalness = 1.0f, maxStretch = 0.3f;
     bool preservePitch = true, protectTransients = true, autoGain = false;
 };
 

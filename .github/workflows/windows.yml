@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, windows-vst3]
-    paths: ['Source/**', 'CMakeLists.txt', 'packaging/**', 'docs/INSTALL-WINDOWS.md', '.github/workflows/windows.yml']
+    paths: ['Source/**', 'CMakeLists.txt', 'packaging/**', '.github/checks/**', 'LICENSE', 'third_party/**', 'docs/INSTALL-WINDOWS.md', '.github/workflows/windows.yml']
 permissions:
   contents: read
 jobs:
@@ -21,7 +21,12 @@ jobs:
           if ($LASTEXITCODE) { throw 'JUCE checkout failed' }
       - name: Build x64 VST3 and installer
         shell: pwsh
-        run: ./packaging/build_windows.ps1
+        run: ./packaging/build_windows.ps1 -WithChecks
+      - name: Verify processor regression
+        shell: pwsh
+        run: |
+          & "./build-windows/FLOWALIGN_verify_artefacts/Release/FLOWALIGN-verify.exe" "$env:RUNNER_TEMP/flowalign-checks"
+          if ($LASTEXITCODE) { throw 'FLOWALIGN processor regression failed' }
       - name: Install, verify, upgrade and validate VST3
         shell: pwsh
         run: |
@@ -38,12 +43,11 @@ jobs:
             if ((Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path $bundle $relative)).Hash) { throw "Installed hash mismatch: $relative" }
           }
           Check-Exit (Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/LOG=$env:RUNNER_TEMP/upgrade.log" -PassThru -Wait) 'Upgrade'
-          $backups = @(Get-ChildItem 'C:\ProgramData\FLOWMINNERS\FLOWALIGN\Backups' -Recurse -File)
-          if ($backups.Count -eq 0) { throw 'Missing upgrade backup' }
+          $backup = Get-ChildItem 'C:\ProgramData\FLOWMINNERS\FLOWALIGN\Backups' -Recurse -Directory -Filter FLOWALIGN.vst3 | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$backup) { throw 'Missing upgrade backup' }
           Get-ChildItem $source -Recurse -File | ForEach-Object {
-            $expected = (Get-FileHash $_.FullName).Hash
-            $backup = @($backups | Where-Object { $_.Name -eq [IO.Path]::GetFileName($_.FullName) -and (Get-FileHash $_.FullName).Hash -eq $expected })
-            if ($backup.Count -eq 0) { throw "Backup hash missing: $($_.Name)" }
+            $relative = $_.FullName.Substring($source.Length + 1)
+            if ((Get-FileHash $_.FullName).Hash -ne (Get-FileHash (Join-Path $backup.FullName $relative)).Hash) { throw "Backup mismatch: $relative" }
           }
           Invoke-WebRequest https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip -OutFile "$env:RUNNER_TEMP/pluginval.zip"
           Expand-Archive "$env:RUNNER_TEMP/pluginval.zip" "$env:RUNNER_TEMP/pluginval"

@@ -697,7 +697,7 @@ void FLOWALIGNAudioProcessorEditor::dragResult()
 
 void FLOWALIGNAudioProcessorEditor::applyPreset(int preset)
 {
-    const std::array<flowalign::Settings, 3> values { flowalign::Settings { 0.7f, 0.6f, 0.3f, true, true, false },
+    const std::array<flowalign::Settings, 3> values { flowalign::Settings { 1.0f, 1.0f, 0.3f, true, true, false },
         flowalign::Settings { 0.95f, 0.25f, 0.5f, true, true, false }, flowalign::Settings { 0.5f, 0.85f, 0.2f, true, true, false } };
     const auto& s = values[static_cast<size_t>(juce::jlimit(1, 3, preset) - 1)];
     engine.setValue("tightness", s.tightness); engine.setValue("naturalness", s.naturalness); engine.setValue("maxStretch", s.maxStretch);

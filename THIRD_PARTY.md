@@ -13,3 +13,11 @@ JUCE не включён в дерево исходников. Он подклю
 Используются AppKit и AVFoundation из macOS SDK. Установщик создаётся штатными pkgbuild/productbuild, подпись AU — codesign. Эти средства не поставляются внутри репозитория.
 
 Скриншот создан настоящим редактором FLOWALIGN на программно генерируемом аудио. Пользовательские записи и проекты не распространяются.
+
+## Лицензия авторского кода
+
+Авторский код FLOWMINNERS распространяется по MIT (см. LICENSE). Эта лицензия не изменяет условия JUCE, Signalsmith, VST3 SDK и других зависимостей. JUCE используется на условиях JUCE 9 EULA либо AGPLv3; MIT не предоставляет отдельного разрешения на JUCE. Условия: https://juce.com/legal/juce-9-licence/.
+
+## VST3 SDK
+
+Steinberg Media Technologies GmbH, MIT; из закреплённой ревизии JUCE. Текст лицензии: third_party/vst3/LICENSE.txt.

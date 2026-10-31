@@ -1,8 +1,8 @@
-FLOWALIGN 0.4.0 · FLOWMINNERS · Windows VST3
+FLOWALIGN 0.4.1 · FLOWMINNERS · Windows VST3
 
 УСТАНОВКА
 1. Сохраните проекты и закройте секвенсоры.
-2. Запустите FLOWALIGN-0.4.0-Windows-x64-Setup.exe и разрешите установку.
+2. Запустите FLOWALIGN-0.4.1-Windows-x64-Setup.exe и разрешите установку.
 3. В FL Studio: Options → Manage plugins → Find installed plugins.
    Выберите FLOWALIGN как эффект на канале микшера с дублем.
    В других VST3-секвенсорах обновите список плагинов.

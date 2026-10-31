@@ -28,8 +28,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout FLOWALIGNAudioProcessor::par
     };
     auto toggle = [&](const char* id, const char* name, bool initial)
     { layout.add(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(id, 1), ru(name), initial)); };
-    number("tightness", u8"Точность", 0.0f, 1.0f, 0.7f);
-    number("naturalness", u8"Естественность", 0.0f, 1.0f, 0.6f);
+    number("tightness", u8"Точность", 0.0f, 1.0f, 1.0f);
+    number("naturalness", u8"Естественность", 0.0f, 1.0f, 1.0f);
     number("maxStretch", u8"Макс. растяжение", 0.05f, 0.8f, 0.3f);
     toggle("preservePitch", u8"Сохранять высоту голоса", true);
     toggle("protectTransients", u8"Защита транзиентов", true);
@@ -54,13 +54,29 @@ FLOWALIGNAudioProcessor::FLOWALIGNAudioProcessor()
     rawLoop = parameters.getRawParameterValue("loop");
     rawSync = parameters.getRawParameterValue("syncHost");
     publish(std::make_shared<Session>());
+    stateDirty.store(false);
+    startTimerHz(30);
 }
 
 FLOWALIGNAudioProcessor::~FLOWALIGNAudioProcessor()
 {
+    stopTimer();
     cancelled.store(true);
     const std::lock_guard<std::mutex> lock(jobMutex);
     if (worker.joinable()) worker.join();
+}
+
+void FLOWALIGNAudioProcessor::timerCallback()
+{
+    pollCapture();
+    pollPreview();
+    {
+        const std::lock_guard<std::mutex> lock(modelMutex);
+        if (audioReaders.load() == 0) retired.clear();
+    }
+    // A host may synchronously request state here. No model/capture lock is held.
+    if (stateDirty.exchange(false))
+        updateHostDisplay(ChangeDetails().withNonParameterStateChanged(true));
 }
 
 bool FLOWALIGNAudioProcessor::isBusesLayoutSupported(const BusesLayout& layout) const
@@ -169,7 +185,7 @@ void FLOWALIGNAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
         if (activeCaptureGeneration != captureGeneration.load())
         {
             activeCaptureGeneration = captureGeneration.load();
-            capturePosition = 0; recording.store(false); captureHasHostTime = false;
+            capturePosition = 0; captureReferenceChannel = -1; recording.store(false); captureHasHostTime = false;
         }
         if (recording.load() && havePosition && (!playing || (captureHasHostTime && std::abs(hostSample - expectedHostSample) > frames * 2)))
         { captureRequested.store(false); capturePending.store(true); recording.store(false); }
@@ -186,17 +202,44 @@ void FLOWALIGNAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
             if (captureMode() != CaptureMode::reference)
                 for (int c = 0; c < captureDub.getNumChannels(); ++c)
                     captureDub.copyFrom(c, capturePosition, main, c, 0, count);
+            // Preserve the existing stereo sum unless phase cancellation
+            // would erase it. Re-evaluate every block so moving between left
+            // and right channels cannot silently remove part of the reference.
+            captureReferenceChannel = -1;
+            if (hasSide && side.getNumChannels() > 1 && count > 0)
+            {
+                double monoEnergy = 0.0, strongestEnergy = 0.0;
+                int strongest = 0;
+                for (int c = 0; c < side.getNumChannels(); ++c)
+                {
+                    const double rms = side.getRMSLevel(c, 0, count);
+                    if (rms * rms > strongestEnergy) { strongestEnergy = rms * rms; strongest = c; }
+                }
+                for (int i = 0; i < count; ++i)
+                {
+                    double mono = 0.0;
+                    for (int c = 0; c < side.getNumChannels(); ++c) mono += side.getSample(c, i);
+                    mono /= side.getNumChannels(); monoEnergy += mono * mono;
+                }
+                if (monoEnergy / count < strongestEnergy * 0.0625)
+                    captureReferenceChannel = strongest;
+            }
             if (captureMode() != CaptureMode::dub)
                 for (int i = 0; i < count; ++i)
                 {
                     float ref = 0.0f;
                     if (hasSide)
-                        for (int c = 0; c < side.getNumChannels(); ++c)
+                    {
+                        if (captureReferenceChannel >= 0) ref = side.getSample(captureReferenceChannel, i);
+                        else for (int c = 0; c < side.getNumChannels(); ++c)
                             ref += side.getSample(c, i) / static_cast<float>(side.getNumChannels());
+                    }
                     if (hasSide)
                     {
                         float dubMono = 0.0f;
-                        for (int c = 0; c < main.getNumChannels(); ++c)
+                        if (captureReferenceChannel >= 0)
+                            dubMono = main.getSample(juce::jmin(captureReferenceChannel, main.getNumChannels() - 1), i);
+                        else for (int c = 0; c < main.getNumChannels(); ++c)
                             dubMono += main.getSample(c, i) / static_cast<float>(main.getNumChannels());
                         // Compare the actual analysis signals, not waveform shapes,
                         // peaks or correlation. Silent samples cannot establish routing.
@@ -252,7 +295,13 @@ void FLOWALIGNAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
             const double time = offset + i / rate;
             if (time >= 0.0 && time < session->result->duration())
                 for (int c = 0; c < main.getNumChannels(); ++c)
-                    main.setSample(c, i, readSample(*session->result, c, time));
+                {
+                    const double fadeSeconds = juce::jmin(0.003, session->result->duration() * 0.5);
+                    const float mix = static_cast<float>(juce::jlimit(0.0, 1.0,
+                        juce::jmin(time, session->result->duration() - time) / fadeSeconds));
+                    const float dry = main.getSample(c, i);
+                    main.setSample(c, i, dry + mix * (readSample(*session->result, c, time) - dry));
+                }
         }
         playbackPosition.store(juce::jmax(0.0, offset));
     }
@@ -274,6 +323,7 @@ void FLOWALIGNAudioProcessor::publish(std::shared_ptr<Session> session)
     if (current) retired.push_back(current);
     current = std::move(session);
     realtimeSession.store(current.get());
+    stateDirty.store(true);
     if (audioReaders.load() == 0) retired.clear();
 }
 
@@ -371,7 +421,9 @@ void FLOWALIGNAudioProcessor::stopCapture()
 
 void FLOWALIGNAudioProcessor::pollCapture()
 {
-    const std::lock_guard<std::mutex> lock(captureMutex);
+    // Reentrant host save callbacks must not wait on an in-progress publication.
+    const std::unique_lock<std::mutex> lock(captureMutex, std::try_to_lock);
+    if (!lock.owns_lock()) return;
     if (!capturePending.load() || captureRequested.load() || audioReaders.load() != 0) return;
     const int count = capturedCount.load();
     if (count > 0)
@@ -406,6 +458,7 @@ void FLOWALIGNAudioProcessor::pollCapture()
                                : ru(u8"Эталон записан. Поставьте курсор на дубль и запишите «Дубль»"));
     }
     else setStatus(ru(u8"Звук не записан. Выберите позицию, нажмите «Запись», затем Play в Logic"));
+    captureDub.setSize(0, 0); captureReference.setSize(0, 0);
     capturePending.store(false);
 }
 
@@ -790,6 +843,7 @@ juce::File FLOWALIGNAudioProcessor::prepareResultForLogic(const juce::File& stor
 
 void FLOWALIGNAudioProcessor::getStateInformation(juce::MemoryBlock& data)
 {
+    pollCapture();
     juce::MemoryOutputStream destination(data, false);
     destination.writeInt(0x46414c33);
     juce::GZIPCompressorOutputStream compressed(&destination, 1, false);
@@ -906,6 +960,7 @@ void FLOWALIGNAudioProcessor::setStateInformation(const void* data, int size)
         next->resultId = juce::Uuid().toString();
     }
     publish(std::move(next));
+    stateDirty.store(false);
     setStatus(ru(u8"Фрагменты и результаты восстановлены из проекта"));
 }
 
