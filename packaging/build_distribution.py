@@ -86,6 +86,16 @@ https://support.apple.com/102445
 волны эталона и дубля, затем нажмите «Выровнять». Запись через Side Chain,
 плееры и перетаскивание результата доступны как прежде.
 ''', encoding='utf-8')
+    english_readme = output / f'{name}-Install-EN.txt'
+    english_readme.write_text(f"""FLOWALIGN {version} · FLOWMINNERS
+
+Close the DAW and open {name}.pkg. Administrator access is required.
+Audio Unit, macOS 12+, Intel and Apple Silicon.
+In Logic: Audio FX → Audio Units → FLOWMINNERS → FLOWALIGN.
+Select EN beside Bypass for English, or RU for Russian. The project saves the language.
+Previous versions are backed up by the installer.
+This package is ad-hoc signed, without Developer ID or Apple notarization.
+""", encoding='utf-8')
     with tempfile.TemporaryDirectory(prefix='flowalign-package-', dir=output) as temporary:
         work = Path(temporary)
         payload = work / 'payload'
@@ -131,7 +141,7 @@ https://support.apple.com/102445
             else:
                 image.unlink(missing_ok=True)
                 print('DMG creation unavailable; the standalone .pkg is ready.', flush=True)
-    delivered = [package, readme] + ([image] if dmg_created else [])
+    delivered = [package, readme, english_readme] + ([image] if dmg_created else [])
     manifest = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in delivered}
     (output / f'{name}-sha256.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n')
     report = {'version': version, 'architectures': architectures, 'minimumMacOS': '12.0',

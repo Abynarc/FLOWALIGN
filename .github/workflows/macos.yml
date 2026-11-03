@@ -23,6 +23,19 @@ jobs:
         run: |
           cmake -S . -B build-ci -DCMAKE_BUILD_TYPE=Release -DFLOWALIGN_BUILD_VERIFICATION=ON
           cmake --build build-ci --target FLOWALIGN_verify --parallel 4
-      - name: Run regression
+      - name: Run regression in Russian and English
         run: |
-          "$GITHUB_WORKSPACE/build-ci/FLOWALIGN_verify_artefacts/Release/FLOWALIGN-verify" "$RUNNER_TEMP/flowalign-checks"
+          python .github/checks/localisation_catalog.py --check
+          driver="$GITHUB_WORKSPACE/build-ci/FLOWALIGN_verify_artefacts/Release/FLOWALIGN-verify"
+          "$driver" localisation "$RUNNER_TEMP/ui-localisation"
+          for language in ru en; do
+            FLOW_UI_TEST_LANGUAGE="$language" "$driver" "$RUNNER_TEMP/flowalign-checks/$language"
+          done
+      - name: Localized interface screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: macos-ui-localisation
+          path: ${{ runner.temp }}/ui-localisation
+          if-no-files-found: error
+          retention-days: 7

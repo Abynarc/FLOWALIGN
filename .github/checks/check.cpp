@@ -10,6 +10,8 @@ using Track = Processor::Track;
 static void require(bool condition, const char* message)
 { if (!condition) throw std::runtime_error(message); }
 
+#include "localisation_checks.h"
+
 static void waitFor(Processor& processor)
 {
     const auto deadline = juce::Time::getMillisecondCounterHiRes() + 30000;
@@ -85,7 +87,7 @@ static void defaultSettingsChecks()
 {
     const flowalign::Settings defaults;
     require(defaults.tightness == 1.0f && defaults.naturalness == 1.0f, "Engine defaults must be 100%");
-    Processor p;
+    Processor p;p.setUiLanguage(testLanguage());
     for (const auto* id : { "tightness", "naturalness" })
     {
         const auto* parameter = p.parameters.getParameter(id);
@@ -95,7 +97,7 @@ static void defaultSettingsChecks()
     }
     p.setValue("tightness", 0.37f); p.setValue("naturalness", 0.42f);
     juce::MemoryBlock state; p.getStateInformation(state);
-    Processor restored;
+    Processor restored;restored.setUiLanguage(testLanguage());
     restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
     auto editor = std::unique_ptr<juce::AudioProcessorEditor>(restored.createEditor());
     require(std::abs(restored.value("tightness") - 0.37f) < 0.00001f
@@ -104,7 +106,7 @@ static void defaultSettingsChecks()
     bool presetFound = false;
     for (auto* child : editor->getChildren())
         if (auto* combo = dynamic_cast<juce::ComboBox*>(child))
-            if (combo->getNumItems() == 3 && combo->getItemText(0) == juce::String::fromUTF8(u8"По умолчанию"))
+            if (combo->getNumItems() == 3 && combo->getItemText(0) == restored.uiText(u8"По умолчанию"))
             {
                 combo->setSelectedId(2, juce::sendNotificationSync);
                 combo->setSelectedId(1, juce::sendNotificationSync);
@@ -122,7 +124,7 @@ static void audioChecks()
     for (int channels : { 1, 2 })
     for (int sideChannels : { 0, 1, 2 })
     {
-        Processor p;
+        Processor p;p.setUiLanguage(testLanguage());
         auto layout = p.getBusesLayout();
         layout.inputBuses.set(0, juce::AudioChannelSet::canonicalChannelSet(channels));
         layout.inputBuses.set(1, juce::AudioChannelSet::canonicalChannelSet(sideChannels));
@@ -169,7 +171,7 @@ public:
 
 static void transportChecks()
 {
-    Processor p; p.setRateAndBufferSizeDetails(48000, 128); p.prepareToPlay(48000, 128);
+    Processor p;p.setUiLanguage(testLanguage()); p.setRateAndBufferSizeDetails(48000, 128); p.prepareToPlay(48000, 128);
     TestPlayHead host; p.setPlayHead(&host);
     juce::AudioBuffer<float> buffer(2, 128); buffer.clear(); buffer.applyGain(0.5f);
     juce::MidiBuffer midi;
@@ -186,7 +188,7 @@ static void transportChecks()
 
 static void captureWorkflowChecks(const juce::File& folder)
 {
-    Processor p;
+    Processor p;p.setUiLanguage(testLanguage());
     auto layout = p.getBusesLayout(); layout.inputBuses.set(1, juce::AudioChannelSet::stereo());
     require(p.setBusesLayout(layout), "Capture workflow layout rejected");
     p.setRateAndBufferSizeDetails(48000, 128); p.prepareToPlay(48000, 128);
@@ -197,6 +199,12 @@ static void captureWorkflowChecks(const juce::File& folder)
     {
         host.samples = static_cast<int64_t>(start * 48000); host.playing = false;
         require(p.startCapture(mode), "Independent capture arm failed");
+        {
+            auto editor = std::unique_ptr<juce::AudioProcessorEditor>(p.createEditor());
+            const auto samples = p.capturedSamples();
+            toggleLanguageRoundTrip(*editor, p);
+            require(p.isCapturing() && p.capturedSamples() == samples, "Language switch interrupted capture");
+        }
         require(!p.newPair() && !p.selectPair(0), "Pair changed during capture");
         require(p.isCapturingTrack(Track::reference) == (mode != Processor::CaptureMode::dub), "Wrong live reference state");
         buffer.clear(); p.processBlock(buffer, midi);
@@ -260,7 +268,7 @@ static void captureWorkflowChecks(const juce::File& folder)
     require(p.startAlignment(), "Second phrase alignment refused"); waitFor(p);
     require(p.hasCurrentResult() && p.snapshot()->anchorSeconds == 90, "Second phrase result missing");
     juce::MemoryBlock state; p.getStateInformation(state);
-    Processor restored; restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+    Processor restored;restored.setUiLanguage(testLanguage()); restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
     require(restored.snapshot()->id == 1 && restored.snapshot()->otherPairs.size() == 1 && restored.hasCurrentResult(), "Multi-phrase session not restored");
     require(restored.selectPair(0) && restored.snapshot()->anchorSeconds == 50 && restored.snapshot()->referenceStartSeconds == 10,
             "Restored phrase lost separate capture positions");
@@ -301,7 +309,7 @@ static void playbackTransferChecks(const juce::File& folder)
 {
     writeWav(folder.getChildFile("player-reference.wav"), vocal(48000, false), 48000);
     writeWav(folder.getChildFile("player-dub.wav"), vocal(48000, true), 48000);
-    Processor p;
+    Processor p;p.setUiLanguage(testLanguage());
     require(!p.startPreview(Track::reference) && !p.isPreviewing(), "Missing reference falsely started playback");
     require(p.loadFile(folder.getChildFile("player-reference.wav"), Track::reference), "Player reference load failed"); waitFor(p);
     require(p.startPreview(Track::reference), "Reference audition wrongly requires a dub"); p.stopPreview();
@@ -338,6 +346,8 @@ static void playbackTransferChecks(const juce::File& folder)
     const auto result = p.snapshot()->result;
     std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditor());
     editor->createComponentSnapshot(editor->getLocalBounds());
+    toggleLanguageRoundTrip(*editor, p);
+    require(p.snapshot()->result == result && p.hasCurrentResult(), "Language switch discarded rendered output");
     for (const auto* id : { "previewReference", "previewDub", "previewResult", "afterResult", "transferResult" })
         require(componentById(*editor, id) && componentById(*editor, id)->isEnabled(), "Recorded signal has no enabled play/transfer control");
     auto* transfer = dynamic_cast<juce::Button*>(componentById(*editor, "transferResult"));
@@ -356,7 +366,7 @@ static void playbackTransferChecks(const juce::File& folder)
     std::cout << "PASS: reference-only audition; three separately selected sources in render and in-memory WAV; source rates/channels preserved; 3 play controls; transfer click and knob edits retain playable/exportable result and enabled After\n";
 
     // Exercise the real macOS backend. This environment may have no output device.
-    Processor offline;
+    Processor offline;offline.setUiLanguage(testLanguage());
     require(offline.loadFile(folder.getChildFile("player-reference.wav"), Track::reference), "System reference import failed"); waitFor(offline);
     const bool started = offline.startSystemPreview(Track::reference, 0.5);
     require(offline.getSampleRate() == 0 && offline.capturedSamples() == 0, "System player initialized host/input recording");
@@ -381,7 +391,7 @@ static void playbackTransferChecks(const juce::File& folder)
 
 static void referenceRoutingChecks()
 {
-    Processor p; auto layout = p.getBusesLayout(); layout.inputBuses.set(1, juce::AudioChannelSet::stereo());
+    Processor p;p.setUiLanguage(testLanguage()); auto layout = p.getBusesLayout(); layout.inputBuses.set(1, juce::AudioChannelSet::stereo());
     require(p.setBusesLayout(layout), "Routing test layout rejected"); p.setRateAndBufferSizeDetails(48000, 128); p.prepareToPlay(48000, 128);
     juce::AudioBuffer<float> buffer(4, 128); juce::MidiBuffer midi;
     auto capture = [&](bool duplicate, bool oneSharedBlock = false)
@@ -423,14 +433,14 @@ static void referenceRoutingChecks()
             "Moving reference between stereo channels lost audio");
     require(std::abs(moved->audio.getSample(0,3)-(-0.05f))<0.000001f,
             "Normal stereo sum changed despite no phase cancellation");
-    Processor missing;
+    Processor missing;missing.setUiLanguage(testLanguage());
     require(!missing.startCapture(Processor::CaptureMode::reference) && !missing.isCapturing(), "Unconnected reference falsely armed");
     std::cout << "PASS: independent sidechain accepted; exact main-input copy rejected; shared intro accepted; absent sidechain has explicit error\n";
 }
 
 static void captureWithoutEditorChecks()
 {
-    Processor p;
+    Processor p;p.setUiLanguage(testLanguage());
     auto layout=p.getBusesLayout();layout.inputBuses.set(1,juce::AudioChannelSet::stereo());
     require(p.setBusesLayout(layout),"Closed editor capture layout");
     p.setRateAndBufferSizeDetails(48000,128);p.prepareToPlay(48000,128);
@@ -475,7 +485,7 @@ static void captureWithoutEditorChecks()
     require(listener.changes>0,"Host did not receive changed audio state notification");
     record(4);
     juce::MemoryBlock state;p.getStateInformation(state);
-    Processor restored;restored.setStateInformation(state.getData(),static_cast<int>(state.getSize()));
+    Processor restored;restored.setUiLanguage(testLanguage());restored.setStateInformation(state.getData(),static_cast<int>(state.getSize()));
     require(restored.snapshot()->dub&&restored.snapshot()->dub->audio.getNumSamples()==512,
             "Immediate project save lost completed capture");
     p.removeListener(&listener);
@@ -486,7 +496,7 @@ static void legacyStateChecks(const juce::File& folder)
 {
     // Fixed 0.2.1 stream schema, independent of the current writer.
     juce::MemoryBlock legacy;
-    Processor source;
+    Processor source;source.setUiLanguage(testLanguage());
     {
         juce::MemoryOutputStream bytes(legacy, false); bytes.writeInt(0x46414c32);
         juce::GZIPCompressorOutputStream out(&bytes, 1, false);
@@ -503,11 +513,11 @@ static void legacyStateChecks(const juce::File& folder)
         out.writeInt(0); out.writeInt(0x454e4432);
     }
     require(folder.getChildFile("legacy-0.2.1.state").replaceWithData(legacy.getData(), legacy.getSize()), "Legacy fixture write failed");
-    Processor restored; restored.setStateInformation(legacy.getData(), static_cast<int>(legacy.getSize()));
+    Processor restored;restored.setUiLanguage(testLanguage()); restored.setStateInformation(legacy.getData(), static_cast<int>(legacy.getSize()));
     require(restored.snapshot()->reference && restored.snapshot()->dub && restored.hasCurrentResult()
             && restored.snapshot()->anchorSeconds == 42.5 && restored.snapshot()->otherPairs.empty(), "0.2.1 project migration failed");
     juce::MemoryBlock updated; restored.getStateInformation(updated);
-    Processor reopened; reopened.setStateInformation(updated.getData(), static_cast<int>(updated.getSize()));
+    Processor reopened;reopened.setUiLanguage(testLanguage()); reopened.setStateInformation(updated.getData(), static_cast<int>(updated.getSize()));
     require(reopened.hasCurrentResult() && reopened.snapshot()->anchorSeconds == 42.5, "Migrated session did not survive a second save");
     std::cout << "PASS: fixed 0.2.1 session migrates to multi-phrase format without losing audio or anchor\n";
 }
@@ -515,7 +525,7 @@ static void legacyStateChecks(const juce::File& folder)
 static void fileOnlyChecks(const juce::File& folder)
 {
     // No prepareToPlay, processBlock, playhead, audio device, or capture.
-    Processor offline;
+    Processor offline;offline.setUiLanguage(testLanguage());
     require(offline.value("syncHost") == 0.0f, "File processing must not auto-start host playback");
     writeWav(folder.getChildFile("reference-48k.wav"), vocal(48000.0, false), 48000.0);
     require(offline.loadFile(folder.getChildFile("reference-48k.wav"), Track::reference), "Offline reference import failed"); waitFor(offline);
@@ -558,7 +568,7 @@ static void callbackStress(const juce::File& folder)
                 longAudio.copyFrom(c, repeat * phrase.getNumSamples(), phrase, c, 0, phrase.getNumSamples());
         writeWav(folder.getChildFile(dub ? "stress-dub.wav" : "stress-reference.wav"), longAudio, rate);
     }
-    Processor p; p.setRateAndBufferSizeDetails(rate, frames); p.prepareToPlay(rate, frames);
+    Processor p;p.setUiLanguage(testLanguage()); p.setRateAndBufferSizeDetails(rate, frames); p.prepareToPlay(rate, frames);
     require(p.loadFile(folder.getChildFile("stress-reference.wav"), Track::reference), "Stress reference import refused"); waitFor(p);
     require(p.loadFile(folder.getChildFile("stress-dub.wav"), Track::dub), "Stress dub import refused"); waitFor(p);
     juce::AudioBuffer<float> buffer(2, frames); juce::MidiBuffer midi;
@@ -611,7 +621,7 @@ static void regionDropChecks(const juce::File& folder)
         require(writer&&writer->writeFromAudioSampleBuffer(audio,0,audio.getNumSamples()),"Synthetic AIFF promise write");
     };
     writePromise(reference,false);writePromise(dub,true);
-    Processor p;
+    Processor p;p.setUiLanguage(testLanguage());
     const auto refRequest = p.dropContext(Track::reference), dubRequest = p.dropContext(Track::dub);
     require(p.loadDroppedRegion(reference, refRequest), "Reference region refused"); waitFor(p);
     require(p.isDropContextCurrent(dubRequest), "Independent reference import invalidated pending dub");
@@ -657,7 +667,7 @@ static void regionDropChecks(const juce::File& folder)
     std::cout << "PASS: synthetic AIFF region payloads (163840 frames, 48 kHz mono), render/state, mismatch preserves pair/result/mode, cross-rate rounding, stale contexts, legacy file import\n";
 
     // Exercise the actual editor callbacks, including asynchronous closure after editor destruction.
-    Processor queued; auto editor = std::make_unique<FLOWALIGNAudioProcessorEditor>(queued);
+    Processor queued;queued.setUiLanguage(testLanguage()); auto editor = std::make_unique<FLOWALIGNAudioProcessorEditor>(queued);
     auto* refDrop = dynamic_cast<flowalign::NativeRegionDrop*>(componentById(*editor, "dropReference"));
     auto* dubDrop = dynamic_cast<flowalign::NativeRegionDrop*>(componentById(*editor, "dropDub"));
     require(refDrop && dubDrop && refDrop->canDrop() && dubDrop->canDrop(), "Native waveform drop zones missing");
@@ -679,9 +689,14 @@ int main(int argc, char** argv)
     try
     {
         juce::ScopedJuceInitialiser_GUI gui;
+        if (argc == 3 && juce::String(argv[1]) == "localisation")
+        {
+            const auto folder = juce::File(argv[2]);folder.createDirectory();
+            localisationChecks<Processor>(folder);return 0;
+        }
         require(argc == 2, "Supply output directory");
         const auto folder = juce::File(argv[1]); folder.createDirectory();
-        Processor p;
+        Processor p;p.setUiLanguage(testLanguage());
         Processor::TrackProperties properties; properties.name = juce::String::fromUTF8(u8"Дубль — припев"); p.updateTrackProperties(properties);
         p.setRateAndBufferSizeDetails(16000, 128); p.prepareToPlay(16000, 128);
         snapshot(p, folder, "editor-empty.png");
@@ -785,7 +800,7 @@ int main(int argc, char** argv)
         p.setPlayHead(nullptr); p.seek(0);
         std::cout << "PASS: imported audio anchor, synchronized result, before mode, passthrough outside region\n";
         juce::MemoryBlock state; p.getStateInformation(state);
-        Processor restored; restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
+        Processor restored;restored.setUiLanguage(testLanguage()); restored.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
         require(restored.snapshot()->result && restored.snapshot()->dub && restored.snapshot()->reference, "Session audio not restored");
         require(restored.value("tightness") == 1.0f, "Parameters not restored");
         require(std::memcmp(restored.snapshot()->result->audio.getReadPointer(0), p.snapshot()->result->audio.getReadPointer(0),

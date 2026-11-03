@@ -1,4 +1,5 @@
 #pragma once
+#include "Localisation.h"
 #include <JuceHeader.h>
 #include "AlignmentEngine.h"
 #include "SystemPreview.h"
@@ -66,6 +67,14 @@ public:
     void setStateInformation(const void*, int) override;
     void updateTrackProperties(const TrackProperties&) override;
 
+    flowui::Language uiLanguage() const { return englishUI.load() ? flowui::Language::english : flowui::Language::russian; }
+    void setUiLanguage(flowui::Language language)
+    {
+        if (englishUI.exchange(language == flowui::Language::english) != (language == flowui::Language::english))
+            updateHostDisplay(ChangeDetails().withNonParameterStateChanged(true));
+    }
+    juce::String uiText(const char* value) const { return flowui::text(juce::String::fromUTF8(value), uiLanguage()); }
+    juce::String uiMessage(const juce::String& value) const { return flowui::message(value, uiLanguage()); }
     juce::AudioProcessorValueTreeState parameters;
     float value(const char* id) const { return parameters.getRawParameterValue(id)->load(); }
     void setValue(const char* id, float actual);
@@ -124,6 +133,7 @@ public:
     static std::shared_ptr<Clip> makeClip(juce::AudioBuffer<float>, double, juce::String);
 
 private:
+    std::atomic<bool> englishUI { false };
     void timerCallback() override;
     static juce::AudioProcessorValueTreeState::ParameterLayout parameterLayout();
     void publish(std::shared_ptr<Session>);

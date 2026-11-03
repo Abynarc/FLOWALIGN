@@ -6,6 +6,7 @@
 class FlowLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
+    juce::Font getComboBoxFont(juce::ComboBox&) override;
     void drawButtonBackground(juce::Graphics&, juce::Button&, const juce::Colour&, bool, bool) override;
     void drawButtonText(juce::Graphics&, juce::TextButton&, bool, bool) override;
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool, bool) override;
@@ -32,6 +33,9 @@ public:
     void revealResult();
     void transferHint();
 private:
+    void refreshLanguage();
+    juce::String tr(const char* value) const { return engine.uiText(value); }
+    juce::ComboBox language;
     class WavePanel;
     class AlignButton;
     class DragButton;

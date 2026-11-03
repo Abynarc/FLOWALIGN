@@ -6,7 +6,6 @@ namespace
 {
 using Track = FLOWALIGNAudioProcessor::Track;
 const juce::Colour green(0xff5aff91), muted(0xff8faaa4), border(0xff2a3e3e), white(0xffeef5f4);
-juce::String ru(const char* text) { return flowalign::platformText(text); }
 void font(juce::Graphics& g, float size, bool bold = false, float spacing = 0.0f)
 {
     juce::Font f(juce::FontOptions("Arial", size, bold ? juce::Font::bold : juce::Font::plain));
@@ -35,6 +34,13 @@ void microphone(juce::Graphics& g, float x, float y, juce::Colour colour)
     p.quadraticTo(x + 4, y + 29, x + 14, y + 29); p.quadraticTo(x + 24, y + 29, x + 24, y + 20); p.lineTo(x + 24, y + 13);
     g.strokePath(p, juce::PathStrokeType(1.8f)); g.drawLine(x + 14, y + 29, x + 14, y + 36, 1.8f); g.drawLine(x + 8, y + 36, x + 20, y + 36, 1.8f);
 }
+}
+
+juce::Font FlowLookAndFeel::getComboBoxFont(juce::ComboBox& box)
+{
+    if (box.getComponentID() == "uiLanguage")
+        return juce::Font(juce::FontOptions("Arial", juce::jlimit(10.0f, 14.0f, box.getHeight() * 0.45f), juce::Font::bold));
+    return juce::LookAndFeel_V4::getComboBoxFont(box);
 }
 
 void FlowLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button, const juce::Colour&, bool over, bool down)
@@ -143,7 +149,7 @@ public:
         addAndMakeVisible(source); addAndMakeVisible(audition);
         audition.setComponentID(track == Track::reference ? "previewReference" : track == Track::dub ? "previewDub" : "previewResult");
         audition.onClick = [this] { owner.togglePreview(track); };
-        audition.setTooltip(ru(u8"Прослушать только этот сигнал через системный выход macOS. Logic можно остановить; Mute дорожки не влияет на этот плеер."));
+        audition.setTooltip(owner.tr(u8"Прослушать только этот сигнал через системный выход macOS. Logic можно остановить; Mute дорожки не влияет на этот плеер."));
         source.onClick = [this]
         {
             if (track == Track::result) owner.revealResult();
@@ -169,7 +175,7 @@ public:
             {
                 const auto context = owner.engine.dropContext(track);
                 const auto request = ++dropRequest;
-                owner.dropFeedback(ru(u8"Получаю регион от Logic…"));
+                owner.dropFeedback(owner.tr(u8"Получаю регион от Logic…"));
                 return [safe = juce::Component::SafePointer<WavePanel>(this), context, request](flowalign::RegionDrop data)
                 {
                     if (safe && request == safe->dropRequest) safe->owner.receiveDrop(std::move(data), context);
@@ -180,8 +186,8 @@ public:
     }
     void setTooltipText()
     {
-        source.setTooltip(track == Track::result ? ru(u8"Показать готовый WAV в Finder. Можно перетащить его из Finder в Logic без ручного сохранения.")
-            : ru(u8"Записать этот сигнал с таймлайна: нажмите кнопку, затем Play в Logic. Для эталона выберите Side Chain. Файлы доступны в меню шестерёнки."));
+        source.setTooltip(track == Track::result ? owner.tr(u8"Показать готовый WAV в Finder. Можно перетащить его из Finder в Logic без ручного сохранения.")
+            : owner.tr(u8"Записать этот сигнал с таймлайна: нажмите кнопку, затем Play в Logic. Для эталона выберите Side Chain. Файлы доступны в меню шестерёнки."));
     }
     void resized() override
     {
@@ -234,16 +240,16 @@ public:
         {
             g.setColour(green); g.drawEllipse(19, 48, 24, 24, 1.7f); g.drawEllipse(30, 37, 24, 24, 1.7f);
         }
-        flowText(g, ref ? ru(u8"ОПОРНАЯ ДОРОЖКА") : output ? ru(u8"РЕЗУЛЬТАТ") : ru(u8"ДОП. ДОРОЖКА"), 19, { 62, 39, 205, 25 }, white, true);
-        flowText(g, ref ? ru(u8"ОСНОВНОЙ ВОКАЛ") : output ? ru(u8"ВЫРОВНЕННЫЙ ВОКАЛ") : ru(u8"ВОКАЛ ДЛЯ ВЫРАВНИВАНИЯ"), 11.7f, { 62, 67, 200, 18 }, muted);
+        flowText(g, ref ? owner.tr(u8"ОПОРНАЯ ДОРОЖКА") : output ? owner.tr(u8"РЕЗУЛЬТАТ") : owner.tr(u8"ДОП. ДОРОЖКА"), 19, { 62, 39, 205, 25 }, white, true);
+        flowText(g, ref ? owner.tr(u8"ОСНОВНОЙ ВОКАЛ") : output ? owner.tr(u8"ВЫРОВНЕННЫЙ ВОКАЛ") : owner.tr(u8"ВОКАЛ ДЛЯ ВЫРАВНИВАНИЯ"), 11.7f, { 62, 67, 200, 18 }, muted);
         const double timelineStart = ref ? session->referenceStartSeconds : session->anchorSeconds;
-        const auto position = timelineStart >= 0.0 ? ru(u8"С ") + juce::String(timelineStart, 3) + ru(u8" с") : ru(u8"Позиция не задана");
-        const auto info = clip ? position + "  /  " + juce::String(clip->duration(), 2) + ru(u8" с") : ref ? ru(u8"ИСТОЧНИК: SIDE CHAIN LOGIC") : ru(u8"ИСТОЧНИК: ЭТА ДОРОЖКА");
+        const auto position = timelineStart >= 0.0 ? owner.tr(u8"С ") + juce::String(timelineStart, 3) + owner.tr(u8" с") : owner.tr(u8"Позиция не задана");
+        const auto info = clip ? position + "  /  " + juce::String(clip->duration(), 2) + owner.tr(u8" с") : ref ? owner.tr(u8"ИСТОЧНИК: SIDE CHAIN LOGIC") : owner.tr(u8"ИСТОЧНИК: ЭТА ДОРОЖКА");
         flowText(g, info, 10.5f, { 24, ref ? 86 : 77, 236, 16 }, muted.withAlpha(0.85f));
-        source.setButtonText(output ? ru(u8"WAV В FINDER") : ref ? (clip ? ru(u8"Перезаписать эталон") : ru(u8"Записать эталон")) : (clip ? ru(u8"Перезаписать дубль") : ru(u8"Записать дубль")));
+        source.setButtonText(output ? owner.tr(u8"WAV В FINDER") : ref ? (clip ? owner.tr(u8"Перезаписать эталон") : owner.tr(u8"Записать эталон")) : (clip ? owner.tr(u8"Перезаписать дубль") : owner.tr(u8"Записать дубль")));
         source.setEnabled(!owner.engine.isBusy() && !owner.engine.isCapturing() && (!output || clip != nullptr));
         const bool playingThis = owner.engine.isPreviewing() && owner.engine.previewTrack() == track;
-        audition.setButtonText(playingThis ? ru(u8"Остановить") : ru(u8"Слушать"));
+        audition.setButtonText(playingThis ? owner.tr(u8"Остановить") : owner.tr(u8"Слушать"));
         audition.setToggleState(playingThis, juce::dontSendNotification);
         audition.setEnabled(clip != nullptr && !owner.engine.isBusy() && !owner.engine.isCapturing() && !owner.engine.isCapturePending());
         const juce::Rectangle<float> wave(272, ref ? 32.0f : 12.0f, 1204, h - (ref ? 44.0f : 24.0f));
@@ -258,7 +264,7 @@ public:
         const double viewStart = juce::jlimit(0.0, juce::jmax(0.0, duration - viewLength), owner.engine.playbackSeconds() - viewLength * 0.5);
         if (ref)
             for (int i = 0; i <= 12; ++i)
-                flowText(g, viewLength < 12.0 ? juce::String(viewStart + viewLength * i / 12.0, 1) + ru(u8" с") : timeText(viewStart + viewLength * i / 12.0), 10, { 272 + i * 100, 9, 70, 16 }, i == 0 ? muted : muted.withAlpha(0.7f));
+                flowText(g, viewLength < 12.0 ? juce::String(viewStart + viewLength * i / 12.0, 1) + owner.tr(u8" с") : timeText(viewStart + viewLength * i / 12.0), 10, { 272 + i * 100, 9, 70, 16 }, i == 0 ? muted : muted.withAlpha(0.7f));
         auto drawPeaks = [&](const std::vector<FLOWALIGNAudioProcessor::Peak>& peaks, juce::Colour ink, bool live, double clipDuration)
         {
             if (peaks.empty()) return;
@@ -285,9 +291,9 @@ public:
         else if (!output && owner.engine.isCapturingTrack(track)) drawPeaks(owner.engine.liveWaveform(ref), colour.withAlpha(0.7f), true, duration);
         if (!clip && !owner.engine.isCapturingTrack(track))
         {
-            const auto hint = output ? ru(u8"Нажмите «Выровнять», чтобы создать результат и включить «После»")
-                : ref ? ru(u8"Перетащите сюда регион из Logic или запишите эталон через Side Chain")
-                      : ru(u8"Перетащите сюда регион той же длины или нажмите «Записать дубль»");
+            const auto hint = output ? owner.tr(u8"Нажмите «Выровнять», чтобы создать результат и включить «После»")
+                : ref ? owner.tr(u8"Перетащите сюда регион из Logic или запишите эталон через Side Chain")
+                      : owner.tr(u8"Перетащите сюда регион той же длины или нажмите «Записать дубль»");
             auto hintBounds = wave.toNearestInt().withSizeKeepingCentre(juce::jmin(880, static_cast<int>(wave.getWidth()) - 40), 32);
             g.setColour(juce::Colour(0xe6050c0e)); g.fillRoundedRectangle(hintBounds.toFloat(), 8);
             flowText(g, hint, 14, hintBounds, muted.withAlpha(0.8f), false, juce::Justification::centred);
@@ -298,13 +304,13 @@ public:
         g.setColour(green); g.drawLine(cursorX, wave.getY(), cursorX, wave.getBottom(), 1.4f);
         const float level = output ? owner.engine.outputLevel() : owner.engine.getPeak(ref);
         const float db = juce::Decibels::gainToDecibels(level, -60.0f);
-        flowText(g, level < 0.00001f ? ru(u8"−∞ дБ") : juce::String(db, 1) + ru(u8" дБ"), 12, { 1486, 20, 66, 18 }, white, false, juce::Justification::centred);
+        flowText(g, level < 0.00001f ? owner.tr(u8"−∞ дБ") : juce::String(db, 1) + owner.tr(u8" дБ"), 12, { 1486, 20, 66, 18 }, white, false, juce::Justification::centred);
         const juce::Rectangle<float> meter(1494, 44, 12, h - 58);
         g.setColour(juce::Colour(0xff172120)); g.fillRect(meter);
         auto fill = meter.withTop(meter.getBottom() - meter.getHeight() * juce::jlimit(0.0f, 1.0f, (db + 60.0f) / 60.0f));
         g.setGradientFill(juce::ColourGradient(juce::Colour(0xffb6ff9b), fill.getX(), fill.getY(), green, fill.getX(), fill.getBottom(), false)); g.fillRect(fill);
         for (int d = 0; d <= 60; d += 12)
-            flowText(g, d == 0 ? "0" : ru(u8"−") + juce::String(d), 8.5f,
+            flowText(g, d == 0 ? "0" : owner.tr(u8"−") + juce::String(d), 8.5f,
                  { 1516, static_cast<int>(meter.getY() + meter.getHeight() * d / 60.0f) - 5, 36, 12 }, muted);
     }
 private:
@@ -354,6 +360,17 @@ FLOWALIGNAudioProcessorEditor::FLOWALIGNAudioProcessorEditor(FLOWALIGNAudioProce
  : AudioProcessorEditor(&p), engine(p)
 {
     setLookAndFeel(&look);
+    addAndMakeVisible(language);
+    language.setComponentID("uiLanguage"); language.setName("Interface language");
+    language.addItem("RU", 1); language.addItem("EN", 2);
+    language.setTooltip(juce::String::fromUTF8("\xd0\xaf\xd0\xb7\xd1\x8b\xd0\xba / Language"));
+    language.setSelectedId(engine.uiLanguage() == flowui::Language::english ? 2 : 1, juce::dontSendNotification);
+    language.onChange = [this]
+    {
+        engine.setUiLanguage(language.getSelectedId() == 2 ? flowui::Language::english : flowui::Language::russian);
+        refreshLanguage();
+    };
+
     look.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff0c1517));
     look.setColour(juce::ComboBox::outlineColourId, border);
     look.setColour(juce::ComboBox::textColourId, white);
@@ -370,29 +387,29 @@ FLOWALIGNAudioProcessorEditor::FLOWALIGNAudioProcessorEditor(FLOWALIGNAudioProce
     for (auto* component : std::initializer_list<juce::Component*> { align.get(), drag.get(), &capture, &play, &stop, &loop, &before, &after, &bypass,
         &link, &settingsButton, &presets, &previousPreset, &nextPreset, &profileA, &profileB, &localMode, &hostMode,
         &saveResult, &saveOriginal, &captureTarget, &pairs, &addPair, &tightness, &naturalness, &maxStretch, &zoom, &preservePitch, &protectTransients, &autoGain, &status }) addAndMakeVisible(component);
-    capture.setButtonText(ru(u8"●  ЗАПИСЬ")); play.setButtonText(ru(u8"▶")); stop.setButtonText(ru(u8"■")); loop.setButtonText(ru(u8"↻"));
-    before.setButtonText(ru(u8"ДО")); after.setButtonText(ru(u8"ПОСЛЕ")); bypass.setButtonText(ru(u8"ОБХОД"));
-    link.setButtonText(ru(u8"↔")); settingsButton.setButtonText(ru(u8"⚙")); previousPreset.setButtonText(ru(u8"‹")); nextPreset.setButtonText(ru(u8"›"));
+    capture.setButtonText(tr(u8"●  ЗАПИСЬ")); play.setButtonText(tr(u8"▶")); stop.setButtonText(tr(u8"■")); loop.setButtonText(tr(u8"↻"));
+    before.setButtonText(tr(u8"ДО")); after.setButtonText(tr(u8"ПОСЛЕ")); bypass.setButtonText(tr(u8"ОБХОД"));
+    link.setButtonText(tr(u8"↔")); settingsButton.setButtonText(tr(u8"⚙")); previousPreset.setButtonText(tr(u8"‹")); nextPreset.setButtonText(tr(u8"›"));
     play.setComponentID("icon_play"); stop.setComponentID("icon_stop"); loop.setComponentID("icon_loop");
     link.setComponentID("icon_link"); settingsButton.setComponentID("icon_settings");
-    profileA.setButtonText("A"); profileB.setButtonText("B"); align->setButtonText(ru(u8"ВЫРОВНЯТЬ"));
-    localMode.setButtonText(ru(u8"ПЛЕЕР: ВЫХОД macOS")); hostMode.setButtonText(ru(u8"ПО ТРАНСПОРТУ LOGIC"));
-    saveResult.setButtonText(ru(u8"СОХРАНИТЬ РЕЗУЛЬТАТ WAV")); drag->setButtonText(ru(u8"ЗАЖМИТЕ И ТАЩИТЕ В LOGIC"));
-    saveOriginal.setButtonText(ru(u8"ИСХОДНЫЙ ДУБЛЬ / КАРТА"));
-    preservePitch.setButtonText(ru(u8"СОХРАНЯТЬ ВЫСОТУ ГОЛОСА")); protectTransients.setButtonText(ru(u8"ЗАЩИТА ТРАНЗИЕНТОВ")); autoGain.setButtonText(ru(u8"ВЫРОВНЯТЬ ГРОМКОСТЬ"));
+    profileA.setButtonText("A"); profileB.setButtonText("B"); align->setButtonText(tr(u8"ВЫРОВНЯТЬ"));
+    localMode.setButtonText(tr(u8"ПЛЕЕР: ВЫХОД macOS")); hostMode.setButtonText(tr(u8"ПО ТРАНСПОРТУ LOGIC"));
+    saveResult.setButtonText(tr(u8"СОХРАНИТЬ РЕЗУЛЬТАТ WAV")); drag->setButtonText(tr(u8"ЗАЖМИТЕ И ТАЩИТЕ В LOGIC"));
+    saveOriginal.setButtonText(tr(u8"ИСХОДНЫЙ ДУБЛЬ / КАРТА"));
+    preservePitch.setButtonText(tr(u8"СОХРАНЯТЬ ВЫСОТУ ГОЛОСА")); protectTransients.setButtonText(tr(u8"ЗАЩИТА ТРАНЗИЕНТОВ")); autoGain.setButtonText(tr(u8"ВЫРОВНЯТЬ ГРОМКОСТЬ"));
     for (auto* button : std::initializer_list<juce::Button*> { &bypass, &loop, &preservePitch, &protectTransients, &autoGain }) button->setClickingTogglesState(true);
-    presets.addItem(ru(u8"По умолчанию"), 1); presets.addItem(ru(u8"Плотный дубль"), 2); presets.addItem(ru(u8"Естественный вокал"), 3);
+    presets.addItem(tr(u8"По умолчанию"), 1); presets.addItem(tr(u8"Плотный дубль"), 2); presets.addItem(tr(u8"Естественный вокал"), 3);
     presets.setSelectedId(1, juce::dontSendNotification); presets.setJustificationType(juce::Justification::centred);
     presets.onChange = [this] { applyPreset(presets.getSelectedId()); };
     previousPreset.onClick = [this] { presets.setSelectedId(presets.getSelectedId() == 1 ? 3 : presets.getSelectedId() - 1); };
     nextPreset.onClick = [this] { presets.setSelectedId(presets.getSelectedId() == 3 ? 1 : presets.getSelectedId() + 1); };
     profileA.onClick = [this] { selectProfile(0); }; profileB.onClick = [this] { selectProfile(1); };
     profiles[0] = profiles[1] = engine.settings();
-    captureTarget.addItem(ru(u8"Запись: оба сигнала"), 1); captureTarget.addItem(ru(u8"Запись: эталон"), 2); captureTarget.addItem(ru(u8"Запись: дубль"), 3);
+    captureTarget.addItem(tr(u8"Запись: оба сигнала"), 1); captureTarget.addItem(tr(u8"Запись: эталон"), 2); captureTarget.addItem(tr(u8"Запись: дубль"), 3);
     captureTarget.setSelectedId(1, juce::dontSendNotification);
-    captureTarget.setTooltip(ru(u8"Можно записать эталон и дубль с разных позиций. Второй сигнал сохраняется."));
+    captureTarget.setTooltip(tr(u8"Можно записать эталон и дубль с разных позиций. Второй сигнал сохраняется."));
     pairs.onChange = [this] { engine.selectPair(pairs.getSelectedId() - 1); updateControls(); };
-    addPair.setButtonText(ru(u8"+ ФРАЗА")); addPair.onClick = [this] { engine.newPair(); updateControls(); };
+    addPair.setButtonText(tr(u8"+ ФРАЗА")); addPair.onClick = [this] { engine.newPair(); updateControls(); };
     capture.onClick = [this]
     {
         if (engine.isCapturing()) engine.stopCapture();
@@ -431,18 +448,18 @@ FLOWALIGNAudioProcessorEditor::FLOWALIGNAudioProcessorEditor(FLOWALIGNAudioProce
     saveResult.onClick = [this] { exportAudio(Track::result); };
     drag->setComponentID("transferResult");
     drag->onDrag = [this] { dragResult(); }; drag->onClick = [this] { transferHint(); };
-    drag->setTooltip(ru(u8"Зажмите левую кнопку мыши и перетащите эту кнопку в пустую область таймлайна Logic. Обычный клик показывает инструкцию; автоматическое создание дорожки не реализовано."));
+    drag->setTooltip(tr(u8"Зажмите левую кнопку мыши и перетащите эту кнопку в пустую область таймлайна Logic. Обычный клик показывает инструкцию; автоматическое создание дорожки не реализовано."));
     saveOriginal.onClick = [this]
     {
-        juce::PopupMenu menu; menu.addItem(1, ru(u8"Сохранить исходный дубль WAV")); menu.addItem(2, ru(u8"Сохранить карту тайминга CSV"), engine.snapshot()->result != nullptr);
+        juce::PopupMenu menu; menu.addItem(1, tr(u8"Сохранить исходный дубль WAV")); menu.addItem(2, tr(u8"Сохранить карту тайминга CSV"), engine.snapshot()->result != nullptr);
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&saveOriginal), [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this)](int id)
         { if (safe) { if (id == 1) safe->exportAudio(Track::dub); if (id == 2) safe->saveTiming(); } });
     };
     settingsButton.onClick = [this]
     {
-        juce::PopupMenu menu; menu.addItem(1, ru(u8"Как добавить дорожки и выровнять вокал"));
-        menu.addItem(2, ru(u8"Очистить сессию…"), !engine.isBusy() && !engine.isCapturing()); menu.addItem(4, ru(u8"Открыть файл эталона…"), !engine.isBusy() && !engine.isCapturing());
-        menu.addItem(5, ru(u8"Открыть файл дубля…"), !engine.isBusy() && !engine.isCapturing());
+        juce::PopupMenu menu; menu.addItem(1, tr(u8"Как добавить дорожки и выровнять вокал"));
+        menu.addItem(2, tr(u8"Очистить сессию…"), !engine.isBusy() && !engine.isCapturing()); menu.addItem(4, tr(u8"Открыть файл эталона…"), !engine.isBusy() && !engine.isCapturing());
+        menu.addItem(5, tr(u8"Открыть файл дубля…"), !engine.isBusy() && !engine.isCapturing());
         menu.addSeparator(); menu.addItem(3, juce::String("FLOWALIGN ") + JucePlugin_VersionString + " / FLOWMINNERS", false);
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&settingsButton), [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this)](int id)
         {
@@ -451,8 +468,8 @@ FLOWALIGNAudioProcessorEditor::FLOWALIGNAudioProcessorEditor(FLOWALIGNAudioProce
             if (id == 4) safe->openAudio(Track::reference);
             if (id == 5) safe->openAudio(Track::dub);
             if (id == 2)
-                juce::AlertWindow::showOkCancelBox(juce::MessageBoxIconType::QuestionIcon, ru(u8"Очистить сессию?"),
-                    ru(u8"Загруженные сигналы и результат будут удалены из плагина. Файлы на диске сохранятся."), ru(u8"Очистить"), ru(u8"Отмена"), safe.getComponent(),
+                juce::AlertWindow::showOkCancelBox(juce::MessageBoxIconType::QuestionIcon, safe->tr(u8"Очистить сессию?"),
+                    safe->tr(u8"Загруженные сигналы и результат будут удалены из плагина. Файлы на диске сохранятся."), safe->tr(u8"Очистить"), safe->tr(u8"Отмена"), safe.getComponent(),
                     juce::ModalCallbackFunction::create([safe](int result) { if (safe && result != 0) safe->engine.clearSession(); }));
         });
     };
@@ -476,14 +493,14 @@ FLOWALIGNAudioProcessorEditor::FLOWALIGNAudioProcessorEditor(FLOWALIGNAudioProce
     zoom.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0); zoom.setColour(juce::Slider::trackColourId, green);
     zoom.setColour(juce::Slider::thumbColourId, green); zoom.onValueChange = [this] { repaint(); referenceWave->repaint(); dubWave->repaint(); resultWave->repaint(); };
     status.setColour(juce::Label::textColourId, muted); status.setFont(juce::FontOptions("Arial", 12.0f, juce::Font::plain));
-    capture.setTooltip(ru(u8"Записать выбранные сигналы с таймлайна. Затем нажмите Play в Logic; Стоп завершает запись."));
-    link.setTooltip(ru(u8"Привязать начало загруженных файлов к текущей позиции курсора Logic"));
-    hostMode.setTooltip(ru(u8"Подставлять результат при воспроизведении Logic внутри захваченного диапазона"));
-    localMode.setTooltip(ru(u8"Кнопки «Слушать» у каждой волны используют системный выход macOS. Работает при остановленном Logic и Mute дорожки; выход Logic может отличаться от системного."));
-    align->setTooltip(ru(u8"Выравнивание тайминга по опорной дорожке. Нужны оба аудиосигнала."));
-    tightness.setTooltip(ru(u8"Степень применения найденной карты тайминга. 0% сохраняет дубль."));
-    naturalness.setTooltip(ru(u8"Сглаживание карты тайминга для сохранения естественной фразировки"));
-    maxStretch.setTooltip(ru(u8"Ограничение локального сжатия и растяжения времени"));
+    capture.setTooltip(tr(u8"Записать выбранные сигналы с таймлайна. Затем нажмите Play в Logic; Стоп завершает запись."));
+    link.setTooltip(tr(u8"Привязать начало загруженных файлов к текущей позиции курсора Logic"));
+    hostMode.setTooltip(tr(u8"Подставлять результат при воспроизведении Logic внутри захваченного диапазона"));
+    localMode.setTooltip(tr(u8"Кнопки «Слушать» у каждой волны используют системный выход macOS. Работает при остановленном Logic и Mute дорожки; выход Logic может отличаться от системного."));
+    align->setTooltip(tr(u8"Выравнивание тайминга по опорной дорожке. Нужны оба аудиосигнала."));
+    tightness.setTooltip(tr(u8"Степень применения найденной карты тайминга. 0% сохраняет дубль."));
+    naturalness.setTooltip(tr(u8"Сглаживание карты тайминга для сохранения естественной фразировки"));
+    maxStretch.setTooltip(tr(u8"Ограничение локального сжатия и растяжения времени"));
     setResizable(true, true); setResizeLimits(1000, 615, 1920, 1180);
     if (auto* constrainer = getConstrainer()) constrainer->setFixedAspectRatio(1600.0 / 980.0);
     setSize(1280, 784); updateControls(); startTimerHz(25);
@@ -502,6 +519,7 @@ juce::Rectangle<int> FLOWALIGNAudioProcessorEditor::scaled(int x, int y, int w, 
 
 void FLOWALIGNAudioProcessorEditor::resized()
 {
+    language.setBounds(scaled(1215, 32, 88, 38));
     referenceWave->setBounds(scaled(20, 108, 1560, 162)); dubWave->setBounds(scaled(20, 282, 1560, 142)); resultWave->setBounds(scaled(20, 436, 1560, 142));
     previousPreset.setBounds(scaled(536, 32, 40, 38)); presets.setBounds(scaled(580, 32, 258, 38)); nextPreset.setBounds(scaled(842, 32, 40, 38));
     profileA.setBounds(scaled(916, 32, 48, 38)); profileB.setBounds(scaled(968, 32, 48, 38)); link.setBounds(scaled(1034, 32, 48, 38));
@@ -526,18 +544,18 @@ void FLOWALIGNAudioProcessorEditor::paint(juce::Graphics& graphics)
     g.setGradientFill(juce::ColourGradient(juce::Colour(0xff122121), 800, -260, juce::Colour(0xff050a0b), 800, 650, true)); g.fillRect(0, 0, 1600, 980);
     g.setColour(border.withAlpha(0.6f)); g.drawRoundedRectangle(3, 3, 1594, 974, 17, 1);
     flowText(g, "FLOW", 48, { 39, 20, 168, 51 }, white, true); flowText(g, "ALIGN", 48, { 176, 20, 208, 51 }, green, true);
-    font(g, 10, false, 0.35f); g.setColour(white); g.drawText(ru(u8"ВЫРАВНИВАНИЕ ВОКАЛЬНЫХ ДОРОЖЕК"), 42, 74, 460, 16, juce::Justification::centredLeft);
+    font(g, 10, false, 0.35f); g.setColour(white); g.drawText(tr(u8"ВЫРАВНИВАНИЕ ВОКАЛЬНЫХ ДОРОЖЕК"), 42, 74, 460, 16, juce::Justification::centredLeft);
     font(g, 15, false, 0.4f); g.setColour(white); g.drawText("FLOWMINNERS", 1305, 33, 210, 24, juce::Justification::centred);
-    flowText(g, ru(u8"ИНСТРУМЕНТЫ ДЛЯ ВОКАЛА"), 8, { 1298, 60, 227, 15 }, muted, false, juce::Justification::centred);
+    flowText(g, tr(u8"ИНСТРУМЕНТЫ ДЛЯ ВОКАЛА"), 8, { 1298, 60, 227, 15 }, muted, false, juce::Justification::centred);
     panel(g, { 20, 595, 320, 257 }); panel(g, { 352, 595, 626, 257 }); panel(g, { 990, 595, 292, 257 }); panel(g, { 1294, 595, 286, 257 });
-    flowText(g, ru(u8"ПРОЦЕСС ВЫРАВНИВАНИЯ"), 15, { 42, 608, 280, 25 }, white, true);
-    flowText(g, ru(u8"НАСТРОЙКИ ВЫРАВНИВАНИЯ"), 15, { 374, 608, 580, 25 });
-    flowText(g, ru(u8"РЕЖИМ ВОСПРОИЗВЕДЕНИЯ"), 14, { 1008, 608, 252, 22 }); flowText(g, ru(u8"ЭКСПОРТ / ПРИМЕНЕНИЕ"), 14, { 1310, 608, 252, 22 });
+    flowText(g, tr(u8"ПРОЦЕСС ВЫРАВНИВАНИЯ"), 15, { 42, 608, 280, 25 }, white, true);
+    flowText(g, tr(u8"НАСТРОЙКИ ВЫРАВНИВАНИЯ"), 15, { 374, 608, 580, 25 });
+    flowText(g, tr(u8"РЕЖИМ ВОСПРОИЗВЕДЕНИЯ"), 14, { 1008, 608, 252, 22 }); flowText(g, tr(u8"ЭКСПОРТ / ПРИМЕНЕНИЕ"), 14, { 1310, 608, 252, 22 });
     const auto session = engine.snapshot();
     const float progress = engine.jobProgress();
     const bool ready = session->result != nullptr;
-    const std::array<juce::String, 6> steps { ru(u8"Запись эталона и дубля"), ru(u8"Анализ опорной дорожки"), ru(u8"Анализ дополнительной"),
-                                           ru(u8"Поиск совпадений"), ru(u8"Создание карты тайминга"), ru(u8"Применение изменений") };
+    const std::array<juce::String, 6> steps { tr(u8"Запись эталона и дубля"), tr(u8"Анализ опорной дорожки"), tr(u8"Анализ дополнительной"),
+                                           tr(u8"Поиск совпадений"), tr(u8"Создание карты тайминга"), tr(u8"Применение изменений") };
     for (int i = 0; i < 6; ++i)
     {
         const bool complete = ready || (i == 0 && session->reference && session->dub)
@@ -555,8 +573,8 @@ void FLOWALIGNAudioProcessorEditor::paint(juce::Graphics& graphics)
     g.setColour(border); g.fillRoundedRectangle(40, 824, 278, 7, 3);
     if (engine.isBusy() || ready)
     { g.setColour(green); g.fillRoundedRectangle(40, 824, 278 * (ready && !engine.isBusy() ? 1.0f : progress), 7, 3); }
-    const std::array<juce::String, 3> labels { ru(u8"ТОЧНОСТЬ"), ru(u8"ЕСТЕСТВЕННОСТЬ"), ru(u8"МАКС. РАСТЯЖЕНИЕ") };
-    const std::array<juce::String, 3> hints { ru(u8"Следовать таймингу\nопорного вокала"), ru(u8"Сохранять живую\nфразировку"), ru(u8"Ограничить изменение\nдлительности") };
+    const std::array<juce::String, 3> labels { tr(u8"ТОЧНОСТЬ"), tr(u8"ЕСТЕСТВЕННОСТЬ"), tr(u8"МАКС. РАСТЯЖЕНИЕ") };
+    const std::array<juce::String, 3> hints { tr(u8"Следовать таймингу\nопорного вокала"), tr(u8"Сохранять живую\nфразировку"), tr(u8"Ограничить изменение\nдлительности") };
     for (int i = 0; i < 3; ++i)
     {
         flowText(g, labels[static_cast<size_t>(i)], 13, { 386 + i * 194, 641, 176, 22 }, white, true, juce::Justification::centred);
@@ -596,7 +614,7 @@ void FLOWALIGNAudioProcessorEditor::filesDropped(const juce::StringArray& files,
 
 void FLOWALIGNAudioProcessorEditor::openAudio(Track track)
 {
-    chooser = std::make_unique<juce::FileChooser>(track == Track::reference ? ru(u8"Открыть опорный вокал") : ru(u8"Открыть дубль"), juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.m4a;*.ogg");
+    chooser = std::make_unique<juce::FileChooser>(track == Track::reference ? tr(u8"Открыть опорный вокал") : tr(u8"Открыть дубль"), juce::File(), "*.wav;*.aif;*.aiff;*.flac;*.mp3;*.m4a;*.ogg");
     chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
         [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this), track](const juce::FileChooser& dialog)
         { if (safe && dialog.getResult().existsAsFile()) safe->engine.loadFile(dialog.getResult(), track); });
@@ -604,7 +622,7 @@ void FLOWALIGNAudioProcessorEditor::openAudio(Track track)
 
 void FLOWALIGNAudioProcessorEditor::sourceMenu(Track track, juce::Component* target)
 {
-    juce::PopupMenu menu; menu.addItem(1, ru(u8"Открыть аудиофайл…")); menu.addItem(2, ru(u8"Как захватить дорожку Logic Pro?"));
+    juce::PopupMenu menu; menu.addItem(1, tr(u8"Открыть аудиофайл…")); menu.addItem(2, tr(u8"Как захватить дорожку Logic Pro?"));
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(target), [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this), track](int result)
     { if (safe) { if (result == 1) safe->openAudio(track); if (result == 2) safe->showHelp(); } });
 }
@@ -612,16 +630,16 @@ void FLOWALIGNAudioProcessorEditor::sourceMenu(Track track, juce::Component* tar
 void FLOWALIGNAudioProcessorEditor::showHelp()
 {
 #if JUCE_WINDOWS
-    juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, ru(u8"FLOWALIGN в Windows"),
-        ru(u8"Перетащите два аудиофайла одинаковой длины на волны эталона и дубля. В FL Studio используйте ручку Drag/copy sample/selection в Edison: переносится выделение или весь сэмпл. Внутренний клип Playlist может не передавать аудиофайл. Тогда используйте захват через Side Chain.\n\n"
+    juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, tr(u8"FLOWALIGN в Windows"),
+        tr(u8"Перетащите два аудиофайла одинаковой длины на волны эталона и дубля. В FL Studio используйте ручку Drag/copy sample/selection в Edison: переносится выделение или весь сэмпл. Внутренний клип Playlist может не передавать аудиофайл. Тогда используйте захват через Side Chain.\n\n"
            u8"Вставьте FLOWALIGN на дубль. Направьте эталон в Side Chain и подключите дополнительный вход в настройках wrapper → Processing. Выберите «Оба сигнала», нажмите «Запись», затем Play в секвенсоре. Stop завершает захват. Эталон и дубль можно записать отдельно. Mute/Solo не выбирают источник.\n\n"
            u8"Кнопки «Слушать» воспроизводят каждый сигнал отдельно через системный выход Windows. Для этого остановите транспорт. Если устройство занято эксклюзивным ASIO, освободите системный выход или слушайте через транспорт.\n\n"
            u8"Нажмите «Выровнять», сравните «До / После» и перетащите кнопку результата на таймлайн. При недоступном переносе откройте готовый WAV кнопкой у результата. Обычный клик не создаёт дорожку.\n\n"
            u8"Позиция импортированного аудио не передаётся: для режима транспорта поставьте курсор на начало дубля и нажмите кнопку связи. Не запускайте секвенсор от администратора: это мешает переносу из Проводника.\n\n"
-           u8"До 8 пар, до 120 секунд на сигнал, суммарно 256 МБ. После изменения настроек снова нажмите «Выровнять»."), ru(u8"Понятно"), this);
+           u8"До 8 пар, до 120 секунд на сигнал, суммарно 256 МБ. После изменения настроек снова нажмите «Выровнять»."), tr(u8"Понятно"), this);
 #else
-    juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, ru(u8"Запись с таймлайна Logic"),
-        ru(u8"Быстрый способ: обрежьте два аудиорегиона в Logic до одинаковой длины. Перетащите по одному прямо на волны «Опорная дорожка» и «Доп. дорожка». Logic передаст готовые файлы; записывать их не нужно. Позиция на таймлайне при переносе не передаётся — для режима по транспорту задайте её кнопкой связи.\n\n"
+    juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::InfoIcon, tr(u8"Запись с таймлайна Logic"),
+        tr(u8"Быстрый способ: обрежьте два аудиорегиона в Logic до одинаковой длины. Перетащите по одному прямо на волны «Опорная дорожка» и «Доп. дорожка». Logic передаст готовые файлы; записывать их не нужно. Позиция на таймлайне при переносе не передаётся — для режима по транспорту задайте её кнопкой связи.\n\n"
            u8"1. Вставьте FLOWALIGN на дорожку дубля. В Side Chain окна Logic выберите эталон.\n\n"
            u8"2. Mute/Solo не выбирают источник эталона. Оставьте дорожку с плагином включённой и выберите опорную именно в Side Chain окна Logic.\n\n"
            u8"Выберите «Оба сигнала», поставьте курсор, нажмите «Запись», затем Play в Logic. Стоп завершает захват.\n\n"
@@ -630,13 +648,13 @@ void FLOWALIGNAudioProcessorEditor::showHelp()
            u8"5. Нажмите «Выровнять». После появления третьей волны можно слушать результат и сравнивать «До / После». Изменение регуляторов не удаляет готовый результат; повторный расчёт применяет новые настройки.\n\n"
            u8"6. Зажмите кнопку «Тащите в Logic» и перетащите её в пустую область таймлайна. Обычный клик не создаёт дорожку. Если перетаскивание недоступно, нажмите «WAV в Finder» у результата. WAV готовится автоматически. Позиция дубля показана слева.\n\n"
            u8"Автоматические Play и создание дорожки кнопкой пока недоступны: Bridge требует проверки в Logic. Файловый импорт и экспорт доступны дополнительно.\n\n"
-           u8"До 8 пар, до 120 секунд на захват, общий лимит аудио 256 МБ. При изменении настроек снова нажмите «Выровнять»."), ru(u8"Понятно"), this);
+           u8"До 8 пар, до 120 секунд на захват, общий лимит аудио 256 МБ. При изменении настроек снова нажмите «Выровнять»."), tr(u8"Понятно"), this);
 #endif
 }
 
 void FLOWALIGNAudioProcessorEditor::exportAudio(Track track)
 {
-    chooser = std::make_unique<juce::FileChooser>(ru(u8"Сохранить аудио WAV"), juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+    chooser = std::make_unique<juce::FileChooser>(tr(u8"Сохранить аудио WAV"), juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
         .getChildFile(track == Track::result ? "FLOWALIGN-result.wav" : "FLOWALIGN-original.wav"), "*.wav");
     chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
         [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this), track](const juce::FileChooser& dialog)
@@ -644,19 +662,19 @@ void FLOWALIGNAudioProcessorEditor::exportAudio(Track track)
             if (!safe || dialog.getResult() == juce::File()) return;
             const bool ok = safe->engine.exportWave(dialog.getResult().withFileExtension("wav"), track);
             juce::AlertWindow::showMessageBoxAsync(ok ? juce::MessageBoxIconType::InfoIcon : juce::MessageBoxIconType::WarningIcon,
-                "FLOWALIGN", ok ? ru(u8"WAV сохранён. Перетащите файл на дорожку в Logic Pro.") : ru(u8"Не удалось сохранить WAV. Проверьте доступ к папке."), ru(u8"ОК"));
+                "FLOWALIGN", ok ? safe->tr(u8"WAV сохранён. Перетащите файл на дорожку в Logic Pro.") : safe->tr(u8"Не удалось сохранить WAV. Проверьте доступ к папке."), safe->tr(u8"ОК"));
         });
 }
 
 void FLOWALIGNAudioProcessorEditor::saveTiming()
 {
-    chooser = std::make_unique<juce::FileChooser>(ru(u8"Сохранить карту тайминга"), juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("FLOWALIGN-timing.csv"), "*.csv");
+    chooser = std::make_unique<juce::FileChooser>(tr(u8"Сохранить карту тайминга"), juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("FLOWALIGN-timing.csv"), "*.csv");
     chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
         [safe = juce::Component::SafePointer<FLOWALIGNAudioProcessorEditor>(this)](const juce::FileChooser& dialog)
         {
             if (!safe || dialog.getResult() == juce::File()) return;
             if (!safe->engine.exportTiming(dialog.getResult().withFileExtension("csv")))
-                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "FLOWALIGN", ru(u8"Не удалось сохранить карту тайминга"), ru(u8"ОК"));
+                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "FLOWALIGN", safe->tr(u8"Не удалось сохранить карту тайминга"), safe->tr(u8"ОК"));
         });
 }
 
@@ -670,7 +688,7 @@ void FLOWALIGNAudioProcessorEditor::togglePreview(Track track)
 
 void FLOWALIGNAudioProcessorEditor::transferHint()
 {
-    feedback = ru(u8"Зажмите кнопку и тащите её на таймлайн Logic. Для переноса через Finder нажмите «WAV в Finder» у результата");
+    feedback = tr(u8"Зажмите кнопку и тащите её на таймлайн Logic. Для переноса через Finder нажмите «WAV в Finder» у результата");
     feedbackUntil = juce::Time::getMillisecondCounterHiRes() + 10000.0;
     updateControls();
 }
@@ -689,8 +707,8 @@ void FLOWALIGNAudioProcessorEditor::dragResult()
     const auto file = engine.prepareResultForLogic();
     if (!file.existsAsFile()) { updateControls(); return; }
     const bool started = juce::DragAndDropContainer::performExternalDragDropOfFiles({ file.getFullPathName() }, false, drag.get());
-    feedback = started ? ru(u8"Перетаскивание начато. Отпустите файл над нужной областью таймлайна Logic")
-        : ru(u8"Перетаскивание не запустилось. Нажмите «WAV в Finder» у результата и перенесите файл оттуда");
+    feedback = started ? tr(u8"Перетаскивание начато. Отпустите файл над нужной областью таймлайна Logic")
+        : tr(u8"Перетаскивание не запустилось. Нажмите «WAV в Finder» у результата и перенесите файл оттуда");
     feedbackUntil = juce::Time::getMillisecondCounterHiRes() + 10000.0;
     updateControls();
 }
@@ -720,19 +738,19 @@ void FLOWALIGNAudioProcessorEditor::updateControls()
     if (pairRevision != session->revision)
     {
         pairRevision = session->revision;
-        pairs.clear(juce::dontSendNotification); pairs.addItemList(engine.pairNames(), 1);
+        pairs.clear(juce::dontSendNotification); for (const auto& name : engine.pairNames()) pairs.addItem(engine.uiMessage(name), pairs.getNumItems() + 1);
         pairs.setSelectedId(session->id + 1, juce::dontSendNotification);
     }
     pairs.setEnabled(!busy && !capturing && !pending); addPair.setEnabled(!busy && !capturing && !pending && session->otherPairs.size() < 7);
     captureTarget.setEnabled(!busy && !capturing && !pending);
     capture.setEnabled(!busy && !pending); capture.setToggleState(capturing, juce::dontSendNotification);
-    capture.setButtonText(capturing ? ru(u8"■  ЗАВЕРШИТЬ") : ru(u8"●  ЗАПИСЬ"));
+    capture.setButtonText(capturing ? tr(u8"■  ЗАВЕРШИТЬ") : tr(u8"●  ЗАПИСЬ"));
     play.setEnabled((session->reference || session->dub || session->result) && !capturing && !pending && !busy); play.setToggleState(engine.isPreviewing(), juce::dontSendNotification);
     align->setEnabled(!capturing && !pending && (busy || (session->reference && session->dub)));
-    align->setButtonText(busy ? ru(u8"ОТМЕНА") : ru(u8"ВЫРОВНЯТЬ"));
+    align->setButtonText(busy ? tr(u8"ОТМЕНА") : tr(u8"ВЫРОВНЯТЬ"));
     after.setEnabled(result && !capturing && !pending && !busy); before.setEnabled(session->dub != nullptr);
-    after.setTooltip(result ? ru(u8"Слушать последний рассчитанный результат. Для новых настроек снова нажмите «Выровнять»")
-        : ru(u8"Сначала нажмите «Выровнять» и дождитесь третьей осциллограммы"));
+    after.setTooltip(result ? tr(u8"Слушать последний рассчитанный результат. Для новых настроек снова нажмите «Выровнять»")
+        : tr(u8"Сначала нажмите «Выровнять» и дождитесь третьей осциллограммы"));
     const bool referencePlaying = engine.isPreviewing() && engine.previewTrack() == Track::reference;
     before.setToggleState(!referencePlaying && session->dub && (!result || engine.value("after") < 0.5f), juce::dontSendNotification);
     after.setToggleState(!referencePlaying && result && engine.value("after") > 0.5f, juce::dontSendNotification);
@@ -741,25 +759,25 @@ void FLOWALIGNAudioProcessorEditor::updateControls()
     link.setEnabled(!busy && !capturing); link.setToggleState(session->anchorSeconds >= 0.0, juce::dontSendNotification);
     saveResult.setEnabled(result && !busy && !capturing && !pending); drag->setEnabled(result && !busy && !capturing && !pending); saveOriginal.setEnabled(session->dub != nullptr && !busy);
     profileA.setToggleState(activeProfile == 0, juce::dontSendNotification); profileB.setToggleState(activeProfile == 1, juce::dontSendNotification);
-    auto line = engine.statusText();
-    if (!engine.isPreviewing() && line == ru(u8"Прослушивание через аудиовыход плагина"))
-        line = result ? ru(u8"Результат готов. Сравните «До / После» или перетащите его в Logic") : ru(u8"Дубль загружен. Добавьте опорный вокал для выравнивания");
+    auto line = engine.uiMessage(engine.statusText());
+    if (!engine.isPreviewing() && line == tr(u8"Прослушивание через аудиовыход плагина"))
+        line = result ? tr(u8"Результат готов. Сравните «До / После» или перетащите его в Logic") : tr(u8"Дубль загружен. Добавьте опорный вокал для выравнивания");
     if (result && !engine.hasCurrentResult() && !busy && !capturing
-        && !line.startsWith(ru(u8"Не удалось")))
-        line = ru(u8"Настройки изменены. Доступен предыдущий результат; нажмите «Выровнять», чтобы применить новые настройки");
-    if (pending) line = ru(u8"Завершение записи…");
+        && !line.startsWith(tr(u8"Не удалось")))
+        line = tr(u8"Настройки изменены. Доступен предыдущий результат; нажмите «Выровнять», чтобы применить новые настройки");
+    if (pending) line = tr(u8"Завершение записи…");
     else if (capturing)
     {
         const bool needsReference = engine.captureMode() != FLOWALIGNAudioProcessor::CaptureMode::dub;
-        line = engine.isCaptureRecording() ? ru(u8"Идёт запись: ") + timeText(engine.capturedSamples() / engine.captureSampleRate())
-            : ru(u8"Нажмите Play в Logic. Дорожка с плагином должна оставаться включённой");
+        line = engine.isCaptureRecording() ? tr(u8"Идёт запись: ") + timeText(engine.capturedSamples() / engine.captureSampleRate())
+            : tr(u8"Нажмите Play в Logic. Дорожка с плагином должна оставаться включённой");
         if (needsReference && engine.referenceMirrorsDub())
-            line = ru(u8"Вход эталона совпадает с дублем. Проверьте Side Chain вверху окна Logic; Mute не выбирает эталон");
-        else if (needsReference && !engine.hasSidechain()) line += ru(u8" · эталон не подключён: выберите Side Chain в Logic");
-        else if (engine.isCaptureRecording()) line += needsReference ? ru(u8" · эталон из Side Chain") : ru(u8" · дубль с этой дорожки");
+            line = tr(u8"Вход эталона совпадает с дублем. Проверьте Side Chain вверху окна Logic; Mute не выбирает эталон");
+        else if (needsReference && !engine.hasSidechain()) line += tr(u8" · эталон не подключён: выберите Side Chain в Logic");
+        else if (engine.isCaptureRecording()) line += needsReference ? tr(u8" · эталон из Side Chain") : tr(u8" · дубль с этой дорожки");
     }
     else if (busy) line += "  " + juce::String(juce::roundToInt(engine.jobProgress() * 100)) + "%";
-    else if (result) line += ru(u8"  ·  Средняя коррекция: ") + juce::String(session->correctionMs, 1) + ru(u8" мс");
+    else if (result) line += tr(u8"  ·  Средняя коррекция: ") + juce::String(session->correctionMs, 1) + tr(u8" мс");
     if (feedback.isNotEmpty() && juce::Time::getMillisecondCounterHiRes() < feedbackUntil && !capturing && !busy) line = feedback;
     status.setText(line, juce::dontSendNotification);
     status.setTooltip(line);
@@ -773,11 +791,11 @@ void FLOWALIGNAudioProcessorEditor::dropFeedback(juce::String message)
 
 void FLOWALIGNAudioProcessorEditor::receiveDrop(flowalign::RegionDrop data, FLOWALIGNAudioProcessor::DropContext context)
 {
-    if (data.error.isNotEmpty()) { dropFeedback(data.error); return; }
+    if (data.error.isNotEmpty()) { dropFeedback(engine.uiMessage(data.error)); return; }
     if (!engine.isDropContextCurrent(context))
-    { dropFeedback(ru(u8"Перенос отменён: фраза или выбранный сигнал уже изменились")); return; }
+    { dropFeedback(tr(u8"Перенос отменён: фраза или выбранный сигнал уже изменились")); return; }
     if (pendingDrops.size() >= 8)
-    { dropFeedback(ru(u8"Дождитесь загрузки уже перенесённых регионов")); return; }
+    { dropFeedback(tr(u8"Дождитесь загрузки уже перенесённых регионов")); return; }
     pendingDrops.push_back({ std::move(data), std::move(context) });
     pollDrops();
 }
@@ -787,19 +805,29 @@ void FLOWALIGNAudioProcessorEditor::pollDrops()
     if (pendingDrops.empty() || engine.isBusy() || engine.isCapturing() || engine.isCapturePending()) return;
     auto pending = std::move(pendingDrops.front()); pendingDrops.pop_front();
     if (!engine.isDropContextCurrent(pending.context))
-    { dropFeedback(ru(u8"Перенос отменён: фраза или выбранный сигнал уже изменились")); return; }
+    { dropFeedback(tr(u8"Перенос отменён: фраза или выбранный сигнал уже изменились")); return; }
     feedback.clear(); feedbackUntil = 0.0;
     const bool started = (pending.data.promised || pending.data.checkLength)
         ? engine.loadDroppedRegion(pending.data.file, pending.context, std::move(pending.data.lease))
         : engine.loadFile(pending.data.file, pending.context.track);
-    if (!started) dropFeedback(engine.statusText());
+    if (!started) dropFeedback(engine.uiMessage(engine.statusText()));
 }
 
 void FLOWALIGNAudioProcessorEditor::timerCallback()
 {
+    if (language.getSelectedId() != (engine.uiLanguage() == flowui::Language::english ? 2 : 1)) refreshLanguage();
+
     engine.pollCapture(); engine.pollPreview(); pollDrops(); updateControls();
     const auto session = engine.snapshot();
     if (session->revision != lastRevision) { lastRevision = session->revision; repaint(); }
     referenceWave->repaint(); dubWave->repaint(); resultWave->repaint();
     repaint(scaled(20, 595, 320, 257)); repaint(scaled(440, 899, 169, 55));
+}
+
+void FLOWALIGNAudioProcessorEditor::refreshLanguage()
+{
+    flowui::refresh(*this, engine.uiLanguage());
+    language.setSelectedId(engine.uiLanguage() == flowui::Language::english ? 2 : 1, juce::dontSendNotification);
+    feedback.clear(); pairRevision = 0; updateControls();
+    repaint();
 }

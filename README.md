@@ -2,6 +2,8 @@
 
 Выравнивает вокальный дубль по эталону, сохраняя высоту голоса. AU для macOS и VST3 для Windows.
 
+Интерфейс **Русский / English**: переключатель **RU / EN** в верхней панели. Выбор сохраняется в проекте.
+
 ![FLOWALIGN](docs/images/flowalign.png)
 
 - Импорт аудиофайлов и регионов или захват дорожек через Side Chain.
@@ -14,8 +16,8 @@
 
 | Система | Формат | Установщик |
 |---|---|---|
-| macOS 12+ · Apple Silicon и Intel | AU | [Скачать PKG](https://github.com/Abynarc/FLOWALIGN/releases/download/v0.4.1/FLOWALIGN-0.4.1-Universal.pkg) |
-| Windows 10/11 · x64 | VST3 | [Скачать EXE](https://github.com/Abynarc/FLOWALIGN/releases/download/v0.4.1/FLOWALIGN-0.4.1-Windows-x64-Setup.exe) |
+| macOS 12+ · Apple Silicon и Intel | AU | [Скачать PKG](https://github.com/Abynarc/FLOWALIGN/releases/download/v0.5.0/FLOWALIGN-0.5.0-Universal.pkg) |
+| Windows 10/11 · x64 | VST3 | [Скачать EXE](https://github.com/Abynarc/FLOWALIGN/releases/download/v0.5.0/FLOWALIGN-0.5.0-Windows-x64-Setup.exe) |
 
 Закройте секвенсор и запустите установщик. В Logic: **Audio FX → Audio Units → FLOWMINNERS → FLOWALIGN**. В FL Studio: **Manage plugins → Find installed plugins**.
 
@@ -24,3 +26,5 @@
 Моно и стерео, до 120 секунд на фрагмент. Установщики пока без сертификата издателя.
 
 [Все релизы](https://github.com/Abynarc/FLOWALIGN/releases) · [Установка Windows и Side Chain](docs/INSTALL-WINDOWS.md)
+
+[English interface layout and terminology](docs/localisation/DESIGN.md) · [English Windows installation](docs/INSTALL-WINDOWS-EN.md)

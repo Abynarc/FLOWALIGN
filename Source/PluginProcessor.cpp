@@ -711,7 +711,7 @@ bool FLOWALIGNAudioProcessor::exportTiming(const juce::File& file) const
 {
     const auto session = snapshot();
     if (session->sourceSeconds.empty()) return false;
-    juce::String csv = ru(u8"Результат_сек,Источник_сек\n");
+    juce::String csv = uiText(u8"Результат_сек,Источник_сек\n");
     const double hop = std::floor(session->dub->sampleRate * 0.01) / session->dub->sampleRate;
     for (size_t i = 0; i < session->sourceSeconds.size(); ++i)
         csv += juce::String(static_cast<double>(i) * hop, 6) + "," + juce::String(session->sourceSeconds[i], 6) + "\n";
@@ -847,7 +847,9 @@ void FLOWALIGNAudioProcessor::getStateInformation(juce::MemoryBlock& data)
     juce::MemoryOutputStream destination(data, false);
     destination.writeInt(0x46414c33);
     juce::GZIPCompressorOutputStream compressed(&destination, 1, false);
-    parameters.copyState().writeToStream(compressed);
+    auto state = parameters.copyState();
+    state.setProperty("uiLanguage", englishUI.load() ? "en" : "ru", nullptr);
+    state.writeToStream(compressed);
     const auto session = snapshot();
     compressed.writeInt(static_cast<int>(session->otherPairs.size()) + 1);
     compressed.writeInt(session->id);
@@ -953,6 +955,7 @@ void FLOWALIGNAudioProcessor::setStateInformation(const void* data, int size)
     if (worker.joinable()) worker.join();
     stopCapture(); pollCapture(); stopPreview();
     dropEpoch.fetch_add(1);
+    englishUI.store(tree.getProperty("uiLanguage", "ru").toString() == "en");
     parameters.replaceState(tree);
     if (legacy && next->result)
     {

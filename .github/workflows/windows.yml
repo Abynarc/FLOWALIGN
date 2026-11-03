@@ -22,11 +22,19 @@ jobs:
       - name: Build x64 VST3 and installer
         shell: pwsh
         run: ./packaging/build_windows.ps1 -WithChecks
-      - name: Verify processor regression
+      - name: Verify Russian and English interfaces and processor regression
         shell: pwsh
         run: |
-          & "./build-windows/FLOWALIGN_verify_artefacts/Release/FLOWALIGN-verify.exe" "$env:RUNNER_TEMP/flowalign-checks"
-          if ($LASTEXITCODE) { throw 'FLOWALIGN processor regression failed' }
+          python .github/checks/localisation_catalog.py --check
+          if ($LASTEXITCODE) { throw 'Catalog check failed' }
+          $driver = "./build-windows/FLOWALIGN_verify_artefacts/Release/FLOWALIGN-verify.exe"
+          & $driver localisation "$env:RUNNER_TEMP/ui-localisation"
+          if ($LASTEXITCODE) { throw 'UI localisation failed' }
+          foreach ($language in @('ru', 'en')) {
+            $env:FLOW_UI_TEST_LANGUAGE = $language
+            & $driver "$env:RUNNER_TEMP/flowalign-checks/$language"
+            if ($LASTEXITCODE) { throw "FLOWALIGN $language regression failed" }
+          }
       - name: Install, verify, upgrade and validate VST3
         shell: pwsh
         run: |
@@ -63,6 +71,7 @@ jobs:
         with:
           name: windows-diagnostics
           path: |
+            ${{ runner.temp }}/ui-localisation
             ${{ runner.temp }}/validation
             ${{ runner.temp }}/install.log
             ${{ runner.temp }}/upgrade.log
@@ -74,6 +83,6 @@ jobs:
           name: FLOWALIGN-Windows-x64
           path: |
             dist/*-Setup.exe
-            dist/*-Windows-Install-RU.txt
+            dist/*-Windows-Install-*.txt
             dist/SHA256SUMS-Windows.txt
           if-no-files-found: error

@@ -32,6 +32,7 @@ russian.WelcomeLabel2=Установщик добавит FLOWALIGN VST3 для 
 [Files]
 Source: "{#PluginDir}\*"; DestDir: "{commoncf64}\VST3\FLOWALIGN.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#DocPath}"; DestDir: "{app}"; DestName: "Установка.txt"; Flags: ignoreversion
+Source: "{#EnglishDocPath}"; DestDir: "{app}"; DestName: "Installation-EN.txt"; Flags: ignoreversion
 
 [Code]
 var
