@@ -1,6 +1,6 @@
 # FLOWALIGN 0.5.0 verification
 
-Compiled source commit: `de67072328250bf157ffba5b67e427ab97457a26`. JUCE: `454fe891acc8204f99f4ef1e3a28c84b1a4da145`. The release documentation update changes no compiled source or packaging logic.
+Compiled source commit: `de67072328250bf157ffba5b67e427ab97457a26`. JUCE: `454fe891acc8204f99f4ef1e3a28c84b1a4da145`. Later documentation and installer repackaging commits do not change the compiled plug-in sources.
 
 | Check | Russian | English |
 |---|---|---|
@@ -14,6 +14,6 @@ The processor suite covers capture/sidechain/transport, mono/stereo and sample r
 
 macOS PKG: arm64 + x86_64, minimum macOS 12. Package expansion, signed-payload hashes, ad-hoc signature, install/upgrade scripts on an isolated volume, system and per-user backups, and corrupted-payload rejection passed. The built AU was loaded directly and checked for both input buses and bit-exact stereo passthrough. Installed system plug-ins were not replaced for these checks.
 
-Windows: installer build, install, byte comparison, upgrade backup, pluginval strictness 5, uninstall and backup retention passed on a Windows runner. RU/EN screenshots from that runner were also inspected.
+Windows: installer build, install, byte comparison, upgrade backup, pluginval strictness 5, uninstall and backup retention passed on a Windows runner. RU/EN screenshots from that runner were also inspected. [Final installer repackaging](https://github.com/Abynarc/FLOWALIGN/actions/runs/41635806573) updates the Russian instructions, checks the source commit and artifact hashes, verifies the unchanged VST3 binary, and repeats install/upgrade/backup/VST3/uninstall validation. Audio-processing tests refer to the source-identical full CI run above.
 
 Limits: no manual listening or interactive Logic/FL Studio session was performed. The Intel slice was cross-compiled; native Intel Mac hardware was not tested. The macOS package is not Developer ID signed/notarized; Windows has no publisher certificate. Host automation parameter names retain their existing registration independently of the custom editor language.
