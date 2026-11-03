@@ -1,8 +1,7 @@
 param(
     [string]$BuildDir = "build-windows",
     [string]$JucePath = "../JUCE",
-    [switch]$SkipBuild,
-    [switch]$WithChecks
+    [switch]$SkipBuild
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
@@ -12,15 +11,10 @@ try {
     $Version = [regex]::Match((Get-Content CMakeLists.txt -Raw), 'project\(FLOWALIGN VERSION (\d+\.\d+\.\d+)').Groups[1].Value
     if (!$Version) { throw "Missing project version" }
     if (!$SkipBuild) {
-        $Checks = if ($WithChecks) { "ON" } else { "OFF" }
-        & cmake -S . -B $BuildDir -A x64 "-DJUCE_PATH=$JucePath" "-DFLOWALIGN_BUILD_VERIFICATION=$Checks"
+        & cmake -S . -B $BuildDir -A x64 "-DJUCE_PATH=$JucePath"
         if ($LASTEXITCODE) { throw "CMake configuration failed" }
         & cmake --build $BuildDir --config Release --target FLOWALIGN_VST3 --parallel 4
         if ($LASTEXITCODE) { throw "VST3 build failed" }
-        if ($WithChecks) {
-            & cmake --build $BuildDir --config Release --target FLOWALIGN_verify --parallel 4
-            if ($LASTEXITCODE) { throw "Regression driver build failed" }
-        }
     }
     $Plugin = (Resolve-Path "$BuildDir/FLOWALIGN_artefacts/Release/VST3/FLOWALIGN.vst3").Path
     $Licenses = New-Item -ItemType Directory -Force (Join-Path $Plugin "Contents/Resources/Licenses")

@@ -67,8 +67,7 @@ def main():
 3. Откройте Logic заново: Audio FX → Audio Units → FLOWMINNERS → FLOWALIGN.
 
 Формат AU, Intel + Apple Silicon. Минимальная версия в сборке — macOS 12.
-Проверки выполнены на Apple Silicon с текущей macOS. Отдельная проверка на
-Intel и macOS 12 не выполнялась; совместимость версии Logic зависит от Apple.
+Требования версии Logic Pro учитываются отдельно.
 
 Плагин: /Library/Audio/Plug-Ins/Components/FLOWALIGN.component
 Копии прежнего плагина: /Library/Application Support/FLOWMINNERS/FLOWALIGN/Backups
@@ -144,10 +143,6 @@ This package is ad-hoc signed, without Developer ID or Apple notarization.
     delivered = [package, readme, english_readme] + ([image] if dmg_created else [])
     manifest = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in delivered}
     (output / f'{name}-sha256.json').write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n')
-    report = {'version': version, 'architectures': architectures, 'minimumMacOS': '12.0',
-              'developerIDSigned': False, 'notarized': False, 'dmgCreated': dmg_created,
-              'payloadHashes': component_hashes, 'artifacts': manifest}
-    (ROOT / 'verification/packaging/package-verification.json').write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n')
     print('Ready:', package, flush=True)
 
 

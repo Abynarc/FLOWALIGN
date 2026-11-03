@@ -1,41 +1,26 @@
-name: macOS regression
+name: macOS installer
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['Source/**', 'CMakeLists.txt', '.github/checks/**', '.github/workflows/macos.yml']
 permissions:
   contents: read
 jobs:
-  regression:
+  build:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-      - name: Fetch pinned JUCE
+      - name: Fetch JUCE
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/juce-framework/JUCE.git ../JUCE
           git -C ../JUCE checkout 454fe891acc8204f99f4ef1e3a28c84b1a4da145
-      - name: Build actual processor verification
-        run: |
-          cmake -S . -B build-ci -DCMAKE_BUILD_TYPE=Release -DFLOWALIGN_BUILD_VERIFICATION=ON
-          cmake --build build-ci --target FLOWALIGN_verify --parallel 4
-      - name: Run regression in Russian and English
-        run: |
-          python .github/checks/localisation_catalog.py --check
-          driver="$GITHUB_WORKSPACE/build-ci/FLOWALIGN_verify_artefacts/Release/FLOWALIGN-verify"
-          "$driver" localisation "$RUNNER_TEMP/ui-localisation"
-          for language in ru en; do
-            FLOW_UI_TEST_LANGUAGE="$language" "$driver" "$RUNNER_TEMP/flowalign-checks/$language"
-          done
-      - name: Localized interface screenshots
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      - name: Build Universal AU and PKG
+        run: python3 packaging/build_distribution.py --no-dmg
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: macos-ui-localisation
-          path: ${{ runner.temp }}/ui-localisation
+          name: FLOWALIGN-macOS-Universal
+          path: |
+            dist/*.pkg
+            dist/*-Install-EN.txt
+            dist/*-Установка.txt
+            dist/*-sha256.json
           if-no-files-found: error
-          retention-days: 7

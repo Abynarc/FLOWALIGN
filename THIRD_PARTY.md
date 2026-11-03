@@ -2,7 +2,7 @@
 
 ## JUCE
 
-FLOWALIGN использует JUCE 9.0.4, проверенная ревизия `454fe891acc8204f99f4ef1e3a28c84b1a4da145`.
+FLOWALIGN использует JUCE 9.0.4, ревизия `454fe891acc8204f99f4ef1e3a28c84b1a4da145`.
 
 Репозиторий: https://github.com/juce-framework/JUCE. Правообладатель: Raw Material Software Limited. В заголовках используемой ревизии указаны JUCE End User Licence Agreement и альтернативные условия AGPLv3. Условия зависимости и её библиотек находятся в исходниках JUCE; этот репозиторий их не заменяет.
 
@@ -16,7 +16,7 @@ JUCE не включён в дерево исходников. Он подклю
 
 ## Лицензия авторского кода
 
-Авторский код FLOWMINNERS распространяется по MIT (см. LICENSE). Эта лицензия не изменяет условия JUCE, Signalsmith, VST3 SDK и других зависимостей. JUCE используется на условиях JUCE 9 EULA либо AGPLv3; MIT не предоставляет отдельного разрешения на JUCE. Условия: https://juce.com/legal/juce-9-licence/.
+Авторский код FLOWMINNERS распространяется по MIT (см. LICENSE). Эта лицензия не изменяет условия зависимостей. JUCE используется на условиях JUCE 9 EULA либо AGPLv3; MIT не предоставляет отдельного разрешения на JUCE. Условия: https://juce.com/legal/juce-9-licence/.
 
 ## VST3 SDK
 
