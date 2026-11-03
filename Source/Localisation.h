@@ -45,6 +45,8 @@ inline juce::String message(const juce::String& value, Language language)
         const auto prefix = platform(juce::String::fromUTF8(key));
         if (!value.startsWith(prefix) || value.length() <= prefix.length()) continue;
         auto rest = value.substring(prefix.length());
+        const auto translatedRest = message(rest, language);
+        if (translatedRest != rest) return text(prefix, language) + translatedRest;
         for (const auto* suffixKey : { u8" · готово", u8" · записано", u8" · запись", u8" с", u8" · прослушивание через системный выход macOS",
               u8"). Проверьте выход звука и эксклюзивный режим ASIO", u8" с. Обрежьте их одинаково; для другой пары нажмите «+ Фраза»" })
         {
@@ -59,7 +61,7 @@ inline juce::String message(const juce::String& value, Language language)
                 return text(prefix, language) + middle + text(suffix, language);
             }
         }
-        return text(prefix, language) + text(rest, language);
+        return text(prefix, language) + rest;
     }
     return exact;
 }

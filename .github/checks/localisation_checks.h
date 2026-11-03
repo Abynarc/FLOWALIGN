@@ -83,6 +83,13 @@ static void localisationChecks(const juce::File& folder)
     const auto filename = juce::String::fromUTF8(u8"Пара Эталон Дубль.wav");
     const auto loading = juce::String::fromUTF8(u8"Загрузка: ") + filename;
     require(flowui::message(loading, Language::english) == "Loading: " + filename || !p.getName().contains("ALIGN"), "Localisation changed a filename");
+    if (p.getName().contains("ALIGN"))
+    {
+        const auto diagnostic = juce::String::fromUTF8(u8"Не удалось обработать аудио: длины регионов различаются: 3.500000 с и 4.000000 с. Обрежьте их одинаково; для другой пары нажмите «+ Фраза»");
+        const auto translated = p.uiMessage(diagnostic);
+        require(!hasCyrillic(translated) && translated.contains("3.500000 s and 4.000000 s"), "Nested import diagnostic was not fully translated");
+        require(p.uiMessage(juce::String::fromUTF8(u8"Пара 8 · готово")) == "Pair 8 · ready", "Pair status was not translated");
+    }
     for (const auto& entry : flowui::translations)
     {
         const auto english = flowui::text(juce::String::fromUTF8(entry.ru), Language::english);
